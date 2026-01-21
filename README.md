@@ -10,6 +10,7 @@ git clone https://github.com/yudhaginongpratidina/karya-nexa.git
 php artisan make:model Category -m
 php artisan make:model Criteria -m
 php artisan make:model Period -m
+php artisan make:model Performance -m
 ```
 
 ## HOW TO RUN
