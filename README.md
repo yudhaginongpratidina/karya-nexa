@@ -4,6 +4,12 @@
 git clone https://github.com/yudhaginongpratidina/karya-nexa.git
 ```
 
+## COMMAND
+
+```bash
+php artisan make:model Category -m
+```
+
 ## HOW TO RUN
 
 ```bash
