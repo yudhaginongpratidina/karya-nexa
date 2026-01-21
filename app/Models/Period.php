@@ -27,4 +27,10 @@ class Period extends Model
     {
         return $this->hasMany(Performance::class);
     }
+
+    // relasi ke tabel topsis_results
+    public function topsisResults(): HasMany
+    {
+        return $this->hasMany(TopsisResult::class);
+    }
 }

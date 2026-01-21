@@ -31,6 +31,12 @@ class User extends Authenticatable
         return $this->hasMany(Performance::class);
     }
 
+    // relasi ke tabel topsis_results
+    public function topsisResults(): HasMany
+    {
+        return $this->hasMany(TopsisResult::class);
+    }
+
     /**
      * The attributes that should be hidden for serialization.
      *

@@ -11,6 +11,7 @@ php artisan make:model Category -m
 php artisan make:model Criteria -m
 php artisan make:model Period -m
 php artisan make:model Performance -m
+php artisan make:model TopsisResult -m
 ```
 
 ## HOW TO RUN
