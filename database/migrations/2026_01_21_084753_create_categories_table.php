@@ -6,22 +6,16 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('categories', function (Blueprint $table) {
             $table->id();
-            $table->string('name');                     // nama kategori
-            $table->decimal('weight', 8, 2);            // bobot kategori (8 digit dengan 2 angka di belakang koma)
+            $table->string('name')->unique();                     
+            $table->decimal('weight', 8, 2)->default(0.00);       
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('categories');
