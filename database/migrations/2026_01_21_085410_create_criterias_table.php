@@ -18,6 +18,8 @@ return new class extends Migration
             $table->decimal('weight', 8, 4);
             $table->enum('type', ['benefit', 'cost']);
             $table->timestamps();
+            $table->index('category_id');
+            $table->index(['category_id', 'type']);
         });
     }
 
