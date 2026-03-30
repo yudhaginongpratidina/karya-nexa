@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\PeriodController;
 use App\Http\Controllers\Api\PerformanceController;
+use App\Http\Controllers\Api\TopsisController;
 
 
 Route::prefix('auth')->group(function () {
@@ -57,4 +58,11 @@ Route::prefix('performances')->group(function () {
     Route::post('/', [PerformanceController::class, 'store']);
     Route::patch('/{id}', [PerformanceController::class, 'update']);
     Route::delete('/{id}', [PerformanceController::class, 'destroy']);
+});
+
+Route::prefix('topsis')->group(function () {
+    Route::post('/calculate', [TopsisController::class, 'calculate']);
+    Route::get('/', [TopsisController::class, 'index']);
+    Route::get('/{id}', [TopsisController::class, 'show']);
+    Route::delete('/{id}', [TopsisController::class, 'destroy']);
 });
