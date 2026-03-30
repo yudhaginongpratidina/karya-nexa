@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\CriteriaController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\PeriodController;
+use App\Http\Controllers\Api\PerformanceController;
 
 
 Route::prefix('auth')->group(function () {
@@ -48,4 +49,12 @@ Route::prefix('criterias')->group(function () {
     Route::post('/', [CriteriaController::class, 'store']);
     Route::patch('/{id}', [CriteriaController::class, 'update']);
     Route::delete('/{id}', [CriteriaController::class, 'destroy']);
+});
+
+Route::prefix('performances')->group(function () {
+    Route::get('/', [PerformanceController::class, 'index']);
+    Route::get('/{id}', [PerformanceController::class, 'show']);
+    Route::post('/', [PerformanceController::class, 'store']);
+    Route::patch('/{id}', [PerformanceController::class, 'update']);
+    Route::delete('/{id}', [PerformanceController::class, 'destroy']);
 });

@@ -15,7 +15,8 @@ class DatabaseSeeder extends Seeder
             CategorySeeder::class,
             CriteriaSeeder::class,
             UserSeeder::class,
-            PeriodSeeder::class
+            PeriodSeeder::class,
+            PerformanceSeeder::class
         ]);
     }
 }
