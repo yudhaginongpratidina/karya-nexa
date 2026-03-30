@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('periods', function (Blueprint $table) {
             $table->id();
-            $table->string('period_name');
-            $table->boolean('is_finalized')->default(false);
+            $table->string('period_name')->unique();
+            $table->boolean('is_finalized')->default(false)->index();
             $table->timestamps();
         });
     }

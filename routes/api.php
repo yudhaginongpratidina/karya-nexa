@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CriteriaController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\PeriodController;
 
 
 Route::prefix('auth')->group(function () {
@@ -23,6 +24,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/{id}', [UserController::class, 'update']);
         Route::delete('/{id}', [UserController::class, 'destroy']);
     });
+});
+
+Route::prefix('periods')->group(function () {
+    Route::get('/', [PeriodController::class, 'index']);
+    Route::get('/{id}', [PeriodController::class, 'show']);
+    Route::post('/', [PeriodController::class, 'store']);
+    Route::patch('/{id}', [PeriodController::class, 'update']);
+    Route::delete('/{id}', [PeriodController::class, 'destroy']);
 });
 
 Route::prefix('categories')->group(function () {
