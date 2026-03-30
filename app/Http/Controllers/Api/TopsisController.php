@@ -189,7 +189,7 @@ class TopsisController extends Controller
         $userIds = $users->pluck('id')->all();
 
         $performances = Performance::query()
-            ->select(['user_id', 'criteria_id', 'value'])
+            ->select(['user_id', 'criteria_id', 'score as value'])
             ->where('period_id', $periodId)
             ->whereIn('user_id', $userIds)
             ->whereIn('criteria_id', $criteriaIds)
