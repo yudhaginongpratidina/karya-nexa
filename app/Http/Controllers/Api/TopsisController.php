@@ -64,11 +64,24 @@ class TopsisController extends Controller
         }
     }
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'period_id' => 'nullable|integer|exists:periods,id',
+        ]);
+
+        $query = TopsisResult::query()
+            ->with(['user', 'period'])
+            ->orderBy('period_id')
+            ->orderBy('rank');
+
+        if (isset($validated['period_id'])) {
+            $query->where('period_id', $validated['period_id']);
+        }
+
         return response()->json([
             'success' => true,
-            'data' => TopsisResult::with(['user', 'period'])->get(),
+            'data' => $query->get(),
         ]);
     }
 
