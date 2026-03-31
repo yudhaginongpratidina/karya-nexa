@@ -12,11 +12,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
-            CategorySeeder::class,
-            CriteriaSeeder::class,
-            UserSeeder::class,
-            PeriodSeeder::class,
-            PerformanceSeeder::class
+            MasterDataSeeder::class,
         ]);
     }
 }
