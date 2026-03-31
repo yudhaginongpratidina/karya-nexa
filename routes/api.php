@@ -26,43 +26,43 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/{id}', [UserController::class, 'update']);
         Route::delete('/{id}', [UserController::class, 'destroy']);
     });
-});
+    
+    Route::prefix('periods')->group(function () {
+        Route::get('/', [PeriodController::class, 'index']);
+        Route::get('/{id}', [PeriodController::class, 'show']);
+        Route::post('/', [PeriodController::class, 'store']);
+        Route::patch('/{id}', [PeriodController::class, 'update']);
+        Route::delete('/{id}', [PeriodController::class, 'destroy']);
+    });
+    
+    Route::prefix('categories')->group(function () {
+        Route::get('/', [CategoryController::class, 'index']);
+        Route::get('/{id}', [CategoryController::class, 'show']);
+        Route::post('/', [CategoryController::class, 'store']);
+        Route::patch('/{id}', [CategoryController::class, 'update']);
+        Route::delete('/{id}', [CategoryController::class, 'destroy']);
+    });
+    
+    Route::prefix('criterias')->group(function () {
+        Route::get('/', [CriteriaController::class, 'index']);
+        Route::get('/{id}', [CriteriaController::class, 'show']);
+        Route::post('/', [CriteriaController::class, 'store']);
+        Route::patch('/{id}', [CriteriaController::class, 'update']);
+        Route::delete('/{id}', [CriteriaController::class, 'destroy']);
+    });
+    
+    Route::prefix('performances')->group(function () {
+        Route::get('/', [PerformanceController::class, 'index']);
+        Route::get('/{id}', [PerformanceController::class, 'show']);
+        Route::post('/', [PerformanceController::class, 'store']);
+        Route::patch('/{id}', [PerformanceController::class, 'update']);
+        Route::delete('/{id}', [PerformanceController::class, 'destroy']);
+    });
 
-Route::prefix('periods')->group(function () {
-    Route::get('/', [PeriodController::class, 'index']);
-    Route::get('/{id}', [PeriodController::class, 'show']);
-    Route::post('/', [PeriodController::class, 'store']);
-    Route::patch('/{id}', [PeriodController::class, 'update']);
-    Route::delete('/{id}', [PeriodController::class, 'destroy']);
-});
-
-Route::prefix('categories')->group(function () {
-    Route::get('/', [CategoryController::class, 'index']);
-    Route::get('/{id}', [CategoryController::class, 'show']);
-    Route::post('/', [CategoryController::class, 'store']);
-    Route::patch('/{id}', [CategoryController::class, 'update']);
-    Route::delete('/{id}', [CategoryController::class, 'destroy']);
-});
-
-Route::prefix('criterias')->group(function () {
-    Route::get('/', [CriteriaController::class, 'index']);
-    Route::get('/{id}', [CriteriaController::class, 'show']);
-    Route::post('/', [CriteriaController::class, 'store']);
-    Route::patch('/{id}', [CriteriaController::class, 'update']);
-    Route::delete('/{id}', [CriteriaController::class, 'destroy']);
-});
-
-Route::prefix('performances')->group(function () {
-    Route::get('/', [PerformanceController::class, 'index']);
-    Route::get('/{id}', [PerformanceController::class, 'show']);
-    Route::post('/', [PerformanceController::class, 'store']);
-    Route::patch('/{id}', [PerformanceController::class, 'update']);
-    Route::delete('/{id}', [PerformanceController::class, 'destroy']);
-});
-
-Route::prefix('topsis')->group(function () {
-    Route::post('/calculate', [TopsisController::class, 'calculate']);
-    Route::get('/', [TopsisController::class, 'index']);
-    Route::get('/{id}', [TopsisController::class, 'show']);
-    Route::delete('/{id}', [TopsisController::class, 'destroy']);
+    Route::prefix('topsis')->group(function () {
+        Route::post('/calculate', [TopsisController::class, 'calculate']);
+        Route::get('/', [TopsisController::class, 'index']);
+        Route::get('/{id}', [TopsisController::class, 'show']);
+        Route::delete('/{id}', [TopsisController::class, 'destroy']);
+    });
 });
