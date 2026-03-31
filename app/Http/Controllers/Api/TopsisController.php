@@ -135,6 +135,8 @@ class TopsisController extends Controller
         }
         unset($result);
 
+        $results = $this->attachUserAndCriteriaBreakdown($results, $users, $criterias, $decisionMatrix);
+
         return [
             'results' => $results,
             'meta' => [
@@ -150,6 +152,39 @@ class TopsisController extends Controller
                 ),
             ],
         ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $results
+     * @param array<int, array<int, float>> $decisionMatrix
+     * @return array<int, array<string, mixed>>
+     */
+    private function attachUserAndCriteriaBreakdown(
+        array $results,
+        Collection $users,
+        Collection $criterias,
+        array $decisionMatrix
+    ): array {
+        $userNames = $users->pluck('name', 'id');
+
+        foreach ($results as &$result) {
+            $userId = (int) $result['user_id'];
+            $criteriaValues = [];
+
+            foreach ($criterias as $criteria) {
+                $criteriaValues[] = [
+                    'criteria_id' => $criteria->id,
+                    'criteria_name' => $criteria->name,
+                    'value' => $decisionMatrix[$userId][$criteria->id] ?? 0.0,
+                ];
+            }
+
+            $result['user_name'] = $userNames->get($userId);
+            $result['criteria_values'] = $criteriaValues;
+        }
+        unset($result);
+
+        return $results;
     }
 
     /**
