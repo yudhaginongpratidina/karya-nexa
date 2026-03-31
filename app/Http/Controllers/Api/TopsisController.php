@@ -128,7 +128,7 @@ class TopsisController extends Controller
         [$idealPlus, $idealMinus] = $this->buildIdealSolutions($criterias, $weightedMatrix);
         $results = $this->buildPreferenceScores($users, $criterias, $weightedMatrix, $idealPlus, $idealMinus);
 
-        usort($results, static fn (array $a, array $b): int => $b['ci'] <=> $a['ci']);
+        usort($results, static fn(array $a, array $b): int => $b['ci'] <=> $a['ci']);
 
         foreach ($results as $index => &$result) {
             $result['rank'] = $index + 1;
@@ -224,7 +224,7 @@ class TopsisController extends Controller
         $userIds = $users->pluck('id')->all();
 
         $performances = Performance::query()
-            ->select(['user_id', 'criteria_id', 'value'])
+            ->select(['user_id', 'criteria_id', 'score'])
             ->where('period_id', $periodId)
             ->whereIn('user_id', $userIds)
             ->whereIn('criteria_id', $criteriaIds)
@@ -234,10 +234,12 @@ class TopsisController extends Controller
             throw new InvalidArgumentException('Data performa untuk periode terpilih belum tersedia.');
         }
 
+
         $indexed = [];
         foreach ($performances as $performance) {
             $indexed[$performance->user_id][$performance->criteria_id] = (float) $performance->score;
         }
+
 
         $matrix = [];
         foreach ($users as $user) {
@@ -407,7 +409,7 @@ class TopsisController extends Controller
             $weightedMatrix = $this->buildWeightedMatrix($users, $criterias, $normalizedMatrix, $adjustedWeights);
             [$idealPlus, $idealMinus] = $this->buildIdealSolutions($criterias, $weightedMatrix);
             $scenarioResults = $this->buildPreferenceScores($users, $criterias, $weightedMatrix, $idealPlus, $idealMinus);
-            usort($scenarioResults, static fn (array $a, array $b): int => $b['ci'] <=> $a['ci']);
+            usort($scenarioResults, static fn(array $a, array $b): int => $b['ci'] <=> $a['ci']);
 
             foreach ($scenarioResults as $index => &$scenarioResult) {
                 $scenarioResult['rank'] = $index + 1;
