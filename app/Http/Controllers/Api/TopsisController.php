@@ -224,15 +224,19 @@ class TopsisController extends Controller
         $userIds = $users->pluck('id')->all();
 
         $performances = Performance::query()
-            ->select(['user_id', 'criteria_id', 'value'])
+            ->select(['user_id', 'criteria_id', 'score'])
             ->where('period_id', $periodId)
             ->whereIn('user_id', $userIds)
             ->whereIn('criteria_id', $criteriaIds)
             ->get();
 
+        if ($performances->isEmpty()) {
+            throw new InvalidArgumentException('Data performa untuk periode terpilih belum tersedia.');
+        }
+
         $indexed = [];
         foreach ($performances as $performance) {
-            $indexed[$performance->user_id][$performance->criteria_id] = (float) $performance->value;
+            $indexed[$performance->user_id][$performance->criteria_id] = (float) $performance->score;
         }
 
         $matrix = [];
