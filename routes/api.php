@@ -53,6 +53,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::prefix('performances')->group(function () {
             Route::get('/', [PerformanceController::class, 'index']);
+            Route::get('/matrix', [PerformanceController::class, 'matrix']);
+            Route::patch('/matrix', [PerformanceController::class, 'bulkUpdate']);
             Route::get('/{id}', [PerformanceController::class, 'show']);
             Route::post('/', [PerformanceController::class, 'store']);
             Route::patch('/{id}', [PerformanceController::class, 'update']);
@@ -63,6 +65,10 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/calculate', [TopsisController::class, 'calculate']);
             Route::delete('/{id}', [TopsisController::class, 'destroy']);
         });
+    });
+
+    Route::middleware('role:admin,user')->group(function () {
+        Route::get('/periods', [PeriodController::class, 'index']);
     });
 
     Route::middleware('role:admin,user')->prefix('topsis')->group(function () {
