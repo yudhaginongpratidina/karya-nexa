@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Performance extends Model
 {
+    protected $fillable = ['user_id', 'criteria_id', 'period_id', 'score'];
+
     // Relasi balik ke User
     public function user(): BelongsTo
     {
