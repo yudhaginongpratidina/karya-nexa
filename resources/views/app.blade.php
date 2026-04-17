@@ -3,48 +3,95 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ config('app.name', 'Karya Nexa') }} - Dashboard</title>
+    <title>{{ config('app.name', 'Karya Nexa') }} - TOPSIS Dashboard</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-screen bg-slate-100 text-slate-800">
-<div class="mx-auto max-w-7xl px-4 py-8">
-    <header class="mb-6 rounded-2xl bg-white p-6 shadow-sm">
-        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-                <p class="text-sm font-medium text-blue-600">Karya Nexa TOPSIS</p>
-                <h1 class="text-2xl font-bold">Admin & User Dashboard</h1>
-                <p id="session-info" class="text-sm text-slate-500">Belum login.</p>
+<body class="app-shell">
+    <div id="auth-panel" class="auth-layout">
+        <section class="auth-card">
+            <div class="auth-card__header">
+                <p class="eyebrow">Karya Nexa</p>
+                <h1>Portal Login</h1>
+                <p class="auth-copy">Masuk dengan akun yang sudah terdaftar untuk mengakses dashboard penilaian.</p>
             </div>
-            <button id="logout-btn" class="hidden rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">
-                Logout
-            </button>
-        </div>
-    </header>
 
-    <section id="auth-panel" class="grid gap-4 md:grid-cols-2">
-        <form id="login-form" class="rounded-2xl bg-white p-6 shadow-sm space-y-4">
-            <h2 class="text-lg font-semibold">Login</h2>
-            <input name="email" type="email" required placeholder="Email" class="w-full rounded-lg border border-slate-300 px-3 py-2">
-            <input name="password" type="password" required placeholder="Password" class="w-full rounded-lg border border-slate-300 px-3 py-2">
-            <button class="w-full rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-500">Masuk</button>
-        </form>
+            <form id="login-form" class="form-stack">
+                <label class="field">
+                    <span>Email</span>
+                    <input name="email" type="email" required autocomplete="email" placeholder="contoh@gmail.com">
+                </label>
 
-        <form id="register-form" class="rounded-2xl bg-white p-6 shadow-sm space-y-4">
-            <h2 class="text-lg font-semibold">Register</h2>
-            <input name="name" required placeholder="Nama" class="w-full rounded-lg border border-slate-300 px-3 py-2">
-            <input name="password" type="password" minlength="8" required placeholder="Password min 8 karakter" class="w-full rounded-lg border border-slate-300 px-3 py-2">
-            <button class="w-full rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500">Daftar</button>
-        </form>
-    </section>
+                <label class="field">
+                    <span>Password</span>
+                    <input name="password" type="password" required autocomplete="current-password" placeholder="Masukkan password">
+                </label>
 
-    <section id="app-panel" class="hidden space-y-4">
-        <div id="nav-tabs" class="flex flex-wrap gap-2"></div>
-        <div id="content-area" class="rounded-2xl bg-white p-6 shadow-sm">
-            <p class="text-slate-500">Pilih menu untuk menampilkan data.</p>
-        </div>
-    </section>
+                <button id="login-submit" class="btn btn-primary btn-block" type="submit">Masuk</button>
+            </form>
+        </section>
+    </div>
 
-    <div id="toast" class="fixed bottom-6 right-6 hidden rounded-lg px-4 py-3 text-sm font-semibold text-white shadow-lg"></div>
-</div>
+    <div id="password-panel" class="auth-layout hidden">
+        <section class="auth-card">
+            <div class="auth-card__header">
+                <p class="eyebrow">Keamanan Akun</p>
+                <h1>Ganti Password</h1>
+                <p id="password-panel-copy" class="auth-copy">Password default perlu diganti sebelum melanjutkan ke dashboard.</p>
+            </div>
+
+            <form id="force-password-form" class="form-stack">
+                <label class="field">
+                    <span>Password Baru</span>
+                    <input name="password" type="password" required autocomplete="new-password" minlength="8" placeholder="Minimal 8 karakter">
+                </label>
+
+                <label class="field">
+                    <span>Konfirmasi Password Baru</span>
+                    <input name="password_confirmation" type="password" required autocomplete="new-password" minlength="8" placeholder="Ulangi password baru">
+                </label>
+
+                <button id="force-password-submit" class="btn btn-primary btn-block" type="submit">Simpan Password Baru</button>
+            </form>
+        </section>
+    </div>
+
+    <div id="app-panel" class="dashboard hidden">
+        <main class="main-panel">
+            <header class="dashboard-header">
+                <div class="brand-card">
+                    <div class="dashboard-header__row">
+                        <div>
+                            <p class="eyebrow">Karya Nexa</p>
+                            <h2>TOPSIS Dashboard</h2>
+                            <p id="session-info" class="muted">Belum login.</p>
+                        </div>
+
+                        <div class="topbar__actions">
+                            <div id="page-badge" class="status-chip">Siap</div>
+                            <button id="logout-btn" class="btn btn-danger-outline">Logout</button>
+                        </div>
+                    </div>
+
+                    <nav id="nav-tabs" class="nav-list"></nav>
+                </div>
+            </header>
+
+            <header class="topbar">
+                <div>
+                    <p class="eyebrow">Panel Aktif</p>
+                    <h1 id="page-title">Dashboard</h1>
+                </div>
+
+                <p class="muted">Kelola data dengan alur yang lebih cepat, lebih rapi, dan lebih mudah dibaca.</p>
+            </header>
+
+            <section id="content-area" class="content-card">
+                <p class="muted">Memuat dashboard...</p>
+            </section>
+        </main>
+    </div>
+
+    <div id="modal-root" class="modal-root hidden"></div>
+    <div id="toast" class="toast hidden"></div>
 </body>
 </html>

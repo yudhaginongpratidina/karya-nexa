@@ -17,6 +17,8 @@ Route::prefix('auth')->group(function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::post('/auth/force-change-password', [AuthController::class, 'forceChangePassword']);
+    Route::post('/auth/update-password', [AuthController::class, 'updatePassword']);
 
     Route::middleware('role:admin')->group(function () {
         Route::prefix('users')->group(function () {
@@ -24,6 +26,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/{id}', [UserController::class, 'show']);
             Route::post('/', [UserController::class, 'store']);
             Route::patch('/{id}', [UserController::class, 'update']);
+            Route::patch('/{id}/reset-password', [UserController::class, 'resetPassword']);
             Route::delete('/{id}', [UserController::class, 'destroy']);
         });
 
@@ -53,17 +56,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::prefix('performances')->group(function () {
             Route::get('/', [PerformanceController::class, 'index']);
-            Route::get('/matrix', [PerformanceController::class, 'matrix']);
-            Route::patch('/matrix', [PerformanceController::class, 'bulkUpdate']);
-            Route::get('/{id}', [PerformanceController::class, 'show']);
+            Route::get('/form-options', [PerformanceController::class, 'formOptions']);
+            Route::get('/group', [PerformanceController::class, 'group']);
             Route::post('/', [PerformanceController::class, 'store']);
-            Route::patch('/{id}', [PerformanceController::class, 'update']);
-            Route::delete('/{id}', [PerformanceController::class, 'destroy']);
+            Route::patch('/group', [PerformanceController::class, 'update']);
+            Route::delete('/group', [PerformanceController::class, 'destroy']);
         });
 
         Route::prefix('topsis')->group(function () {
+            Route::get('/preview', [TopsisController::class, 'preview']);
             Route::post('/calculate', [TopsisController::class, 'calculate']);
-            Route::delete('/{id}', [TopsisController::class, 'destroy']);
+            Route::delete('/period/{periodId}', [TopsisController::class, 'destroyByPeriod']);
         });
     });
 
@@ -73,6 +76,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('role:admin,user')->prefix('topsis')->group(function () {
         Route::get('/', [TopsisController::class, 'index']);
-        Route::get('/{id}', [TopsisController::class, 'show']);
+        Route::get('/period/{periodId}', [TopsisController::class, 'show']);
     });
 });

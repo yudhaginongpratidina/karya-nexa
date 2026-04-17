@@ -4,165 +4,108 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Period;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class PeriodController extends Controller
 {
-    /**
-     * GET /api/periods
-     */
     public function index(): JsonResponse
     {
-        try {
-            $data = Period::latest()->get();
+        $periods = Period::query()
+            ->withCount(['performances', 'topsisResults'])
+            ->orderByDesc('created_at')
+            ->get();
 
-            return response()->json([
-                'success' => true,
-                'data' => $data
-            ], 200);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch periods',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'success' => true,
+            'data' => $periods,
+        ]);
     }
 
-    /**
-     * GET /api/periods/{id}
-     */
-    public function show($id): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        try {
-            $period = Period::find($id);
+        $period = Period::query()
+            ->withCount(['performances', 'topsisResults'])
+            ->find($id);
 
-            if (!$period) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Period not found'
-                ], 404);
-            }
-
-            return response()->json([
-                'success' => true,
-                'data' => $period
-            ], 200);
-        } catch (\Throwable $e) {
+        if (! $period) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error fetching data',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Periode tidak ditemukan.',
+            ], 404);
         }
+
+        return response()->json([
+            'success' => true,
+            'data' => $period,
+        ]);
     }
 
-    /**
-     * POST /api/periods
-     */
     public function store(Request $request): JsonResponse
     {
-        try {
-            $validated = $request->validate([
-                'period_name' => 'required|string|max:255|unique:periods,period_name',
-                'is_finalized' => 'nullable|boolean'
-            ]);
+        $validated = $request->validate([
+            'period_name' => 'required|string|max:255|unique:periods,period_name',
+        ]);
 
-            $period = Period::create([
-                'period_name' => $validated['period_name'],
-                'is_finalized' => $validated['is_finalized'] ?? false,
-            ]);
+        $period = Period::create([
+            'period_name' => $validated['period_name'],
+            'is_finalized' => false,
+        ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Period created',
-                'data' => $period
-            ], 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation error',
-                'errors' => $e->errors()
-            ], 422);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create period',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Periode berhasil ditambahkan.',
+            'data' => $period,
+        ], 201);
     }
 
-    /**
-     * PATCH /api/periods/{id}
-     */
-    public function update(Request $request, $id): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
-        try {
-            $period = Period::find($id);
+        $period = Period::find($id);
 
-            if (!$period) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Period not found'
-                ], 404);
-            }
-
-            $validated = $request->validate([
-                'period_name' => 'sometimes|required|string|max:255|unique:periods,period_name,' . $id,
-                'is_finalized' => 'sometimes|boolean'
-            ]);
-
-            $period->update($validated);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Period updated',
-                'data' => $period
-            ], 200);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        if (! $period) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validation error',
-                'errors' => $e->errors()
-            ], 422);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update period',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Periode tidak ditemukan.',
+            ], 404);
         }
+
+        if ($period->is_finalized) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Periode yang sudah selesai tidak bisa diedit.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'period_name' => 'required|string|max:255|unique:periods,period_name,' . $id,
+        ]);
+
+        $period->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Periode berhasil diperbarui.',
+            'data' => $period->fresh(),
+        ]);
     }
 
-    /**
-     * DELETE /api/periods/{id}
-     */
-    public function destroy($id): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
-        try {
-            $period = Period::find($id);
+        $period = Period::find($id);
 
-            if (!$period) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Period not found'
-                ], 404);
-            }
-
-            $period->delete();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Period deleted'
-            ], 200);
-        } catch (\Throwable $e) {
+        if (! $period) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete period',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Periode tidak ditemukan.',
+            ], 404);
         }
+
+        $period->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Periode berhasil dihapus.',
+        ]);
     }
 }

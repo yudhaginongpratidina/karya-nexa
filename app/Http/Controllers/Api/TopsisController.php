@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Criteria;
 use App\Models\Performance;
+use App\Models\Period;
 use App\Models\TopsisResult;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -15,6 +16,27 @@ use InvalidArgumentException;
 
 class TopsisController extends Controller
 {
+    public function preview(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:periods,id',
+        ]);
+
+        try {
+            $dataset = $this->buildDataset((int) $validated['period_id']);
+
+            return response()->json([
+                'success' => true,
+                'data' => $dataset,
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage(),
+            ], 422);
+        }
+    }
+
     public function calculate(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -24,27 +46,35 @@ class TopsisController extends Controller
         DB::beginTransaction();
 
         try {
-            $calculation = $this->calculateTopsis((int) $validated['period_id']);
-            $results = $calculation['results'];
+            $period = Period::findOrFail($validated['period_id']);
 
-            foreach ($results as $result) {
-                TopsisResult::updateOrCreate(
-                    [
-                        'user_id' => $result['user_id'],
-                        'period_id' => $validated['period_id'],
-                    ],
-                    [
-                        'preference_value' => $result['ci'],
-                        'rank' => $result['rank'],
-                    ]
-                );
+            if ($period->is_finalized) {
+                throw new InvalidArgumentException('Periode ini sudah selesai dihitung.');
             }
+
+            $calculation = $this->calculateTopsis((int) $validated['period_id']);
+
+            TopsisResult::query()->where('period_id', $validated['period_id'])->delete();
+
+            foreach ($calculation['results'] as $result) {
+                TopsisResult::create([
+                    'user_id' => $result['user_id'],
+                    'period_id' => $validated['period_id'],
+                    'preference_value' => $result['ci'],
+                    'rank' => $result['rank'],
+                ]);
+            }
+
+            $period->update([
+                'is_finalized' => true,
+            ]);
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'data' => $results,
+                'message' => 'Perhitungan TOPSIS berhasil disimpan dan periode ditandai selesai.',
+                'data' => $calculation['results'],
                 'meta' => $calculation['meta'],
             ]);
         } catch (InvalidArgumentException $exception) {
@@ -64,74 +94,142 @@ class TopsisController extends Controller
         }
     }
 
-    public function index(Request $request): JsonResponse
+    public function index(): JsonResponse
     {
-        $validated = $request->validate([
-            'period_id' => 'nullable|integer|exists:periods,id',
-        ]);
-
-        $query = TopsisResult::query()
-            ->with(['user', 'period'])
-            ->orderBy('period_id')
-            ->orderBy('rank');
-
-        if (isset($validated['period_id'])) {
-            $query->where('period_id', $validated['period_id']);
-        }
+        $periods = Period::query()
+            ->whereHas('topsisResults')
+            ->withCount('topsisResults')
+            ->orderByDesc('created_at')
+            ->get();
 
         return response()->json([
             'success' => true,
-            'data' => $query->get(),
+            'data' => $periods,
         ]);
     }
 
-    public function show(int $id): JsonResponse
+    public function show(int $periodId): JsonResponse
     {
-        $data = TopsisResult::with(['user', 'period'])->find($id);
+        $period = Period::query()
+            ->with(['topsisResults' => function ($query) {
+                $query->with('user:id,name')->orderBy('rank');
+            }])
+            ->find($periodId);
 
-        if (! $data) {
+        if (! $period || $period->topsisResults->isEmpty()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Not found',
+                'message' => 'Hasil perhitungan tidak ditemukan.',
             ], 404);
         }
 
         return response()->json([
             'success' => true,
-            'data' => $data,
+            'data' => [
+                'period' => $period->only(['id', 'period_name', 'is_finalized']),
+                'results' => $period->topsisResults->map(function (TopsisResult $result) {
+                    return [
+                        'id' => $result->id,
+                        'user_id' => $result->user_id,
+                        'user_name' => $result->user?->name,
+                        'preference_value' => (float) $result->preference_value,
+                        'rank' => $result->rank,
+                    ];
+                })->values(),
+            ],
         ]);
     }
 
-    public function destroy(int $id): JsonResponse
+    public function destroyByPeriod(int $periodId): JsonResponse
     {
-        $data = TopsisResult::find($id);
+        $period = Period::find($periodId);
 
-        if (! $data) {
+        if (! $period) {
             return response()->json([
                 'success' => false,
-                'message' => 'Not found',
+                'message' => 'Periode tidak ditemukan.',
             ], 404);
         }
 
-        $data->delete();
+        TopsisResult::query()->where('period_id', $periodId)->delete();
+
+        $period->update([
+            'is_finalized' => false,
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Deleted',
+            'message' => 'Hasil perhitungan berhasil dihapus dan periode dibuka kembali.',
         ]);
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    private function buildDataset(int $periodId): array
+    {
+        $criterias = Criteria::query()
+            ->select(['id', 'name', 'weight', 'type'])
+            ->orderBy('id')
+            ->get();
+
+        if ($criterias->isEmpty()) {
+            throw new InvalidArgumentException('Kriteria belum tersedia.');
+        }
+
+        $users = User::query()
+            ->select(['users.id', 'users.name'])
+            ->join('performances', 'performances.user_id', '=', 'users.id')
+            ->where('performances.period_id', $periodId)
+            ->distinct()
+            ->orderBy('users.name')
+            ->get();
+
+        if ($users->isEmpty()) {
+            throw new InvalidArgumentException('Belum ada data performa pada periode tersebut.');
+        }
+
+        $decisionMatrix = $this->buildDecisionMatrix($users, $criterias, $periodId);
+
+        return [
+            'period' => Period::query()->select(['id', 'period_name', 'is_finalized'])->findOrFail($periodId),
+            'criterias' => $criterias->map(function (Criteria $criteria, int $index) {
+                return [
+                    'id' => $criteria->id,
+                    'code' => 'C' . ($index + 1),
+                    'name' => $criteria->name,
+                    'type' => $criteria->type,
+                    'weight' => (float) $criteria->weight,
+                ];
+            })->values(),
+            'alternatives' => $users->values()->map(function (User $user, int $index) use ($criterias, $decisionMatrix) {
+                $scores = [];
+
+                foreach ($criterias as $criteriaIndex => $criteria) {
+                    $scores[] = [
+                        'criteria_id' => $criteria->id,
+                        'code' => 'C' . ($criteriaIndex + 1),
+                        'name' => $criteria->name,
+                        'score' => $decisionMatrix[$user->id][$criteria->id] ?? 0,
+                    ];
+                }
+
+                return [
+                    'user_id' => $user->id,
+                    'alternative_code' => 'A' . ($index + 1),
+                    'user_name' => $user->name,
+                    'scores' => $scores,
+                ];
+            }),
+        ];
+    }
+
     private function calculateTopsis(int $periodId): array
     {
-        $users = User::query()->select(['id', 'name'])->orderBy('id')->get();
+        $dataset = $this->buildDataset($periodId);
+        $users = User::query()
+            ->whereIn('id', collect($dataset['alternatives'])->pluck('user_id'))
+            ->select(['id', 'name'])
+            ->orderBy('name')
+            ->get();
         $criterias = Criteria::query()->select(['id', 'name', 'weight', 'type'])->orderBy('id')->get();
-
-        if ($users->isEmpty() || $criterias->isEmpty()) {
-            throw new InvalidArgumentException('Data user atau kriteria belum tersedia.');
-        }
 
         $normalizedWeights = $this->normalizeWeights($criterias);
         $decisionMatrix = $this->buildDecisionMatrix($users, $criterias, $periodId);
@@ -141,68 +239,55 @@ class TopsisController extends Controller
         [$idealPlus, $idealMinus] = $this->buildIdealSolutions($criterias, $weightedMatrix);
         $results = $this->buildPreferenceScores($users, $criterias, $weightedMatrix, $idealPlus, $idealMinus);
 
-        usort($results, static fn(array $a, array $b): int => $b['ci'] <=> $a['ci']);
+        usort($results, static fn (array $a, array $b): int => $b['ci'] <=> $a['ci']);
 
         foreach ($results as $index => &$result) {
             $result['rank'] = $index + 1;
         }
         unset($result);
 
-        $results = $this->attachUserAndCriteriaBreakdown($results, $users, $criterias, $decisionMatrix);
+        $results = $this->attachUserBreakdown($results, $users, $criterias, $decisionMatrix);
 
         return [
             'results' => $results,
             'meta' => [
+                'period' => $dataset['period'],
+                'criterias' => $dataset['criterias'],
                 'normalized_weights' => $normalizedWeights,
                 'ideal_plus' => $idealPlus,
                 'ideal_minus' => $idealMinus,
-                'stability_analysis' => $this->analyzeWeightSensitivity(
-                    $users,
-                    $criterias,
-                    $normalizedMatrix,
-                    $normalizedWeights,
-                    $results
-                ),
             ],
         ];
     }
 
-    /**
-     * @param array<int, array<string, mixed>> $results
-     * @param array<int, array<int, float>> $decisionMatrix
-     * @return array<int, array<string, mixed>>
-     */
-    private function attachUserAndCriteriaBreakdown(
+    private function attachUserBreakdown(
         array $results,
         Collection $users,
         Collection $criterias,
         array $decisionMatrix
     ): array {
         $userNames = $users->pluck('name', 'id');
+        $userCodes = $users->values()->mapWithKeys(function (User $user, int $index) {
+            return [$user->id => 'A' . ($index + 1)];
+        });
 
         foreach ($results as &$result) {
-            $userId = (int) $result['user_id'];
-            $criteriaValues = [];
-
-            foreach ($criterias as $criteria) {
-                $criteriaValues[] = [
+            $result['user_name'] = $userNames->get($result['user_id']);
+            $result['alternative_code'] = $userCodes->get($result['user_id']);
+            $result['criteria_values'] = $criterias->values()->map(function (Criteria $criteria, int $index) use ($result, $decisionMatrix) {
+                return [
                     'criteria_id' => $criteria->id,
+                    'code' => 'C' . ($index + 1),
                     'criteria_name' => $criteria->name,
-                    'value' => $decisionMatrix[$userId][$criteria->id] ?? 0.0,
+                    'value' => $decisionMatrix[$result['user_id']][$criteria->id] ?? 0.0,
                 ];
-            }
-
-            $result['user_name'] = $userNames->get($userId);
-            $result['criteria_values'] = $criteriaValues;
+            })->all();
         }
         unset($result);
 
         return $results;
     }
 
-    /**
-     * @return array<int, float>
-     */
     private function normalizeWeights(Collection $criterias): array
     {
         $totalWeight = (float) $criterias->sum('weight');
@@ -213,24 +298,12 @@ class TopsisController extends Controller
 
         $normalized = [];
         foreach ($criterias as $criteria) {
-            $weight = (float) $criteria->weight;
-
-            if ($weight < 0) {
-                throw new InvalidArgumentException(sprintf(
-                    'Bobot kriteria %s tidak boleh negatif.',
-                    $criteria->name
-                ));
-            }
-
-            $normalized[$criteria->id] = $weight / $totalWeight;
+            $normalized[$criteria->id] = (float) $criteria->weight / $totalWeight;
         }
 
         return $normalized;
     }
 
-    /**
-     * @return array<int, array<int, float>>
-     */
     private function buildDecisionMatrix(Collection $users, Collection $criterias, int $periodId): array
     {
         $criteriaIds = $criterias->pluck('id')->all();
@@ -247,27 +320,27 @@ class TopsisController extends Controller
             throw new InvalidArgumentException('Data performa untuk periode terpilih belum tersedia.');
         }
 
-
         $indexed = [];
         foreach ($performances as $performance) {
             $indexed[$performance->user_id][$performance->criteria_id] = (float) $performance->score;
         }
 
-
         $matrix = [];
         foreach ($users as $user) {
             foreach ($criterias as $criteria) {
-                $matrix[$user->id][$criteria->id] = $indexed[$user->id][$criteria->id] ?? 0.0;
+                if (! isset($indexed[$user->id][$criteria->id])) {
+                    throw new InvalidArgumentException(
+                        'Masih ada nilai performa yang belum lengkap untuk user ' . $user->name . '.'
+                    );
+                }
+
+                $matrix[$user->id][$criteria->id] = $indexed[$user->id][$criteria->id];
             }
         }
 
         return $matrix;
     }
 
-    /**
-     * @param array<int, array<int, float>> $matrix
-     * @return array<int, array<int, float>>
-     */
     private function normalizeDecisionMatrix(Collection $users, Collection $criterias, array $matrix): array
     {
         $divider = [];
@@ -287,7 +360,6 @@ class TopsisController extends Controller
             foreach ($criterias as $criteria) {
                 $denominator = $divider[$criteria->id];
                 $value = $matrix[$user->id][$criteria->id];
-
                 $normalized[$user->id][$criteria->id] = $denominator > 0 ? $value / $denominator : 0.0;
             }
         }
@@ -295,11 +367,6 @@ class TopsisController extends Controller
         return $normalized;
     }
 
-    /**
-     * @param array<int, array<int, float>> $normalizedMatrix
-     * @param array<int, float> $normalizedWeights
-     * @return array<int, array<int, float>>
-     */
     private function buildWeightedMatrix(
         Collection $users,
         Collection $criterias,
@@ -318,10 +385,6 @@ class TopsisController extends Controller
         return $weighted;
     }
 
-    /**
-     * @param array<int, array<int, float>> $weightedMatrix
-     * @return array{array<int, float>, array<int, float>}
-     */
     private function buildIdealSolutions(Collection $criterias, array $weightedMatrix): array
     {
         $idealPlus = [];
@@ -329,15 +392,7 @@ class TopsisController extends Controller
 
         foreach ($criterias as $criteria) {
             $values = array_column($weightedMatrix, $criteria->id);
-
-            if ($values === []) {
-                $idealPlus[$criteria->id] = 0.0;
-                $idealMinus[$criteria->id] = 0.0;
-                continue;
-            }
-
-            $type = strtolower((string) $criteria->type);
-            $isCost = $type === 'cost';
+            $isCost = strtolower((string) $criteria->type) === 'cost';
 
             $idealPlus[$criteria->id] = $isCost ? min($values) : max($values);
             $idealMinus[$criteria->id] = $isCost ? max($values) : min($values);
@@ -346,12 +401,6 @@ class TopsisController extends Controller
         return [$idealPlus, $idealMinus];
     }
 
-    /**
-     * @param array<int, array<int, float>> $weightedMatrix
-     * @param array<int, float> $idealPlus
-     * @param array<int, float> $idealMinus
-     * @return array<int, array{user_id: int, ci: float}>
-     */
     private function buildPreferenceScores(
         Collection $users,
         Collection $criterias,
@@ -382,74 +431,5 @@ class TopsisController extends Controller
         }
 
         return $results;
-    }
-
-    /**
-     * @param array<int, array<int, float>> $normalizedMatrix
-     * @param array<int, float> $normalizedWeights
-     * @param array<int, array{user_id: int, ci: float, rank?: int}> $baseResults
-     * @return array<int, array<string, mixed>>
-     */
-    private function analyzeWeightSensitivity(
-        Collection $users,
-        Collection $criterias,
-        array $normalizedMatrix,
-        array $normalizedWeights,
-        array $baseResults
-    ): array {
-        $baseByUser = [];
-        foreach ($baseResults as $item) {
-            $baseByUser[$item['user_id']] = [
-                'ci' => $item['ci'],
-                'rank' => $item['rank'] ?? null,
-            ];
-        }
-
-        $analysis = [];
-        foreach ($criterias as $criteria) {
-            $adjustedWeights = $normalizedWeights;
-            $adjustedWeights[$criteria->id] = $adjustedWeights[$criteria->id] * 1.1;
-
-            $sumAdjusted = array_sum($adjustedWeights);
-            if ($sumAdjusted <= 0) {
-                continue;
-            }
-
-            foreach ($adjustedWeights as $id => $weight) {
-                $adjustedWeights[$id] = $weight / $sumAdjusted;
-            }
-
-            $weightedMatrix = $this->buildWeightedMatrix($users, $criterias, $normalizedMatrix, $adjustedWeights);
-            [$idealPlus, $idealMinus] = $this->buildIdealSolutions($criterias, $weightedMatrix);
-            $scenarioResults = $this->buildPreferenceScores($users, $criterias, $weightedMatrix, $idealPlus, $idealMinus);
-            usort($scenarioResults, static fn(array $a, array $b): int => $b['ci'] <=> $a['ci']);
-
-            foreach ($scenarioResults as $index => &$scenarioResult) {
-                $scenarioResult['rank'] = $index + 1;
-            }
-            unset($scenarioResult);
-
-            $impacts = [];
-            foreach ($scenarioResults as $scenarioResult) {
-                $base = $baseByUser[$scenarioResult['user_id']] ?? ['ci' => 0.0, 'rank' => null];
-                $impacts[] = [
-                    'user_id' => $scenarioResult['user_id'],
-                    'delta_ci' => $scenarioResult['ci'] - $base['ci'],
-                    'old_rank' => $base['rank'],
-                    'new_rank' => $scenarioResult['rank'],
-                    'rank_changed' => $base['rank'] !== null && $base['rank'] !== $scenarioResult['rank'],
-                ];
-            }
-
-            $analysis[] = [
-                'criteria_id' => $criteria->id,
-                'criteria_name' => $criteria->name,
-                'scenario' => 'weight_plus_10_percent',
-                'adjusted_weights' => $adjustedWeights,
-                'impacts' => $impacts,
-            ];
-        }
-
-        return $analysis;
     }
 }

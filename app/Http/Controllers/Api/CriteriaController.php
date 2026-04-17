@@ -2,125 +2,117 @@
 
 namespace App\Http\Controllers\Api;
 
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\DB;
-
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use App\Models\Category;
 use App\Models\Criteria;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class CriteriaController extends Controller
 {
-    public function index()
+    public function index(): JsonResponse
     {
-        $data = Criteria::with('category')->latest()->get();
+        $categoryId = request()->integer('category_id');
+
+        $criterias = Criteria::query()
+            ->with('category:id,name')
+            ->when($categoryId, fn ($query) => $query->where('category_id', $categoryId))
+            ->orderBy('category_id')
+            ->orderBy('name')
+            ->get();
 
         return response()->json([
             'success' => true,
-            'message' => 'List of criterias',
-            'data' => $data
-        ], 200);
+            'data' => $criterias,
+            'meta' => [
+                'selected_category_id' => $categoryId ?: null,
+                'categories' => Category::query()->select(['id', 'name'])->orderBy('name')->get(),
+            ],
+        ]);
     }
 
-    public function show($id)
+    public function show(int $id): JsonResponse
     {
-        $criteria = Criteria::with('category')->find($id);
+        $criteria = Criteria::query()
+            ->with('category:id,name')
+            ->find($id);
 
-        if (!$criteria) {
+        if (! $criteria) {
             return response()->json([
                 'success' => false,
-                'message' => 'Criteria not found'
+                'message' => 'Kriteria tidak ditemukan.',
             ], 404);
         }
 
         return response()->json([
             'success' => true,
-            'data' => $criteria
-        ], 200);
+            'data' => $criteria,
+        ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'category_id' => 'required|exists:categories,id',
             'name' => 'required|string|max:255',
-            'weight' => 'required|numeric|min:0|max:1',
-            'type' => 'required|in:benefit,cost'
+            'type' => 'required|in:benefit,cost',
+            'weight' => 'nullable|numeric|min:0.0001|max:999999.9999',
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation error',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $criteria = Criteria::create($validator->validated());
+        $criteria = Criteria::create([
+            'category_id' => $validated['category_id'],
+            'name' => $validated['name'],
+            'type' => $validated['type'],
+            'weight' => $validated['weight'] ?? 1,
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Criteria created',
-            'data' => $criteria
+            'message' => 'Kriteria berhasil ditambahkan.',
+            'data' => $criteria->load('category:id,name'),
         ], 201);
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, int $id): JsonResponse
     {
         $criteria = Criteria::find($id);
 
-        if (!$criteria) {
+        if (! $criteria) {
             return response()->json([
                 'success' => false,
-                'message' => 'Criteria not found'
+                'message' => 'Kriteria tidak ditemukan.',
             ], 404);
         }
 
-        $validator = Validator::make($request->all(), [
-            'category_id' => 'sometimes|exists:categories,id',
-            'name' => 'sometimes|string|max:255',
-            'weight' => 'sometimes|numeric|min:0|max:1',
-            'type' => 'sometimes|in:benefit,cost'
+        $validated = $request->validate([
+            'category_id' => 'required|exists:categories,id',
+            'name' => 'required|string|max:255',
+            'type' => 'required|in:benefit,cost',
+            'weight' => 'nullable|numeric|min:0.0001|max:999999.9999',
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation error',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+        $criteria->update([
+            'category_id' => $validated['category_id'],
+            'name' => $validated['name'],
+            'type' => $validated['type'],
+            'weight' => $validated['weight'] ?? $criteria->weight,
+        ]);
 
-        DB::beginTransaction();
-        try {
-            $criteria->update($validator->validated());
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Criteria updated',
-                'data' => $criteria
-            ], 200);
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Update failed',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Kriteria berhasil diperbarui.',
+            'data' => $criteria->fresh()->load('category:id,name'),
+        ]);
     }
 
-    public function destroy($id)
+    public function destroy(int $id): JsonResponse
     {
         $criteria = Criteria::find($id);
 
-        if (!$criteria) {
+        if (! $criteria) {
             return response()->json([
                 'success' => false,
-                'message' => 'Criteria not found'
+                'message' => 'Kriteria tidak ditemukan.',
             ], 404);
         }
 
@@ -128,7 +120,7 @@ class CriteriaController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Criteria deleted'
-        ], 200);
+            'message' => 'Kriteria berhasil dihapus.',
+        ]);
     }
 }

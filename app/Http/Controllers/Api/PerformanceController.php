@@ -3,61 +3,66 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Criteria;
+use App\Models\Category;
 use App\Models\Performance;
 use App\Models\Period;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class PerformanceController extends Controller
 {
-    /**
-     * GET /api/performances
-     */
-    public function index(Request $request): JsonResponse
+    public function index(): JsonResponse
     {
-        try {
-            if ($request->boolean('summary')) {
-                $data = Performance::query()
-                    ->select('user_id', 'period_id', DB::raw('COUNT(*) as criteria_count'), DB::raw('AVG(score) as average_score'))
-                    ->with([
-                        'user:id,name',
-                        'period:id,period_name,is_finalized',
-                    ])
-                    ->groupBy('user_id', 'period_id')
-                    ->orderByDesc('period_id')
-                    ->orderBy('user_id')
-                    ->get();
+        $periodId = request()->integer('period_id');
 
-                return response()->json([
-                    'success' => true,
-                    'data' => $data,
-                ], 200);
-            }
+        $groups = Performance::query()
+            ->select('user_id', 'period_id', DB::raw('COUNT(*) as criteria_count'), DB::raw('AVG(score) as average_score'))
+            ->with([
+                'user:id,name',
+                'period:id,period_name,is_finalized',
+            ])
+            ->when($periodId, fn ($query) => $query->where('period_id', $periodId))
+            ->groupBy('user_id', 'period_id')
+            ->orderByDesc('period_id')
+            ->orderBy('user_id')
+            ->get();
 
-            $data = Performance::with(['user', 'criteria', 'period'])
-                ->latest()
-                ->paginate(10);
-
-            return response()->json([
-                'success' => true,
-                'data' => $data,
-            ], 200);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch performances',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
+        return response()->json([
+            'success' => true,
+            'data' => $groups,
+            'meta' => [
+                'selected_period_id' => $periodId ?: null,
+                'periods' => Period::query()
+                    ->select(['id', 'period_name', 'is_finalized'])
+                    ->orderByDesc('created_at')
+                    ->get(),
+            ],
+        ]);
     }
 
-    /**
-     * GET /api/performances/matrix
-     */
-    public function matrix(Request $request): JsonResponse
+    public function formOptions(): JsonResponse
+    {
+        $categories = Category::query()
+            ->with(['criterias' => function ($query) {
+                $query->select(['id', 'category_id', 'name', 'type', 'weight'])
+                    ->orderBy('name');
+            }])
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'users' => User::query()->select(['id', 'name'])->where('role', 'user')->orderBy('name')->get(),
+                'periods' => Period::query()->select(['id', 'period_name', 'is_finalized'])->orderByDesc('created_at')->get(),
+                'categories' => $categories,
+            ],
+        ]);
+    }
+
+    public function group(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
@@ -66,42 +71,85 @@ class PerformanceController extends Controller
 
         $period = Period::findOrFail($validated['period_id']);
 
-        $criteria = Criteria::query()
-            ->select(['id', 'name', 'type'])
-            ->orderBy('id')
-            ->get();
+        $categories = Category::query()
+            ->with(['criterias' => function ($query) use ($validated) {
+                $query->select(['id', 'category_id', 'name', 'type', 'weight'])
+                    ->with(['performances' => function ($performanceQuery) use ($validated) {
+                        $performanceQuery
+                            ->select(['id', 'criteria_id', 'user_id', 'period_id', 'score'])
+                            ->where('user_id', $validated['user_id'])
+                            ->where('period_id', $validated['period_id']);
+                    }])
+                    ->orderBy('name');
+            }])
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
-        $performanceMap = Performance::query()
-            ->where('user_id', $validated['user_id'])
-            ->where('period_id', $validated['period_id'])
-            ->get()
-            ->keyBy('criteria_id');
-
-        $rows = $criteria->map(function (Criteria $item) use ($performanceMap) {
-            $performance = $performanceMap->get($item->id);
-
+        $rows = $categories->map(function (Category $category) {
             return [
-                'criteria_id' => $item->id,
-                'criteria_name' => $item->name,
-                'criteria_type' => $item->type,
-                'performance_id' => $performance?->id,
-                'score' => $performance?->score,
+                'category_id' => $category->id,
+                'category_name' => $category->name,
+                'criterias' => $category->criterias->map(function ($criteria) {
+                    $performance = $criteria->performances->first();
+
+                    return [
+                        'criteria_id' => $criteria->id,
+                        'criteria_name' => $criteria->name,
+                        'type' => $criteria->type,
+                        'weight' => (float) $criteria->weight,
+                        'score' => $performance?->score,
+                    ];
+                })->values(),
             ];
-        });
+        })->values();
 
         return response()->json([
             'success' => true,
             'data' => [
-                'period' => $period,
+                'user' => User::query()->select(['id', 'name'])->find($validated['user_id']),
+                'period' => $period->only(['id', 'period_name', 'is_finalized']),
                 'rows' => $rows,
             ],
         ]);
     }
 
-    /**
-     * PATCH /api/performances/matrix
-     */
-    public function bulkUpdate(Request $request): JsonResponse
+    public function store(Request $request): JsonResponse
+    {
+        return $this->saveGroup($request, false);
+    }
+
+    public function update(Request $request): JsonResponse
+    {
+        return $this->saveGroup($request, true);
+    }
+
+    public function destroy(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'period_id' => 'required|exists:periods,id',
+        ]);
+
+        $period = Period::findOrFail($validated['period_id']);
+        if ($period->is_finalized) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Periode yang sudah selesai tidak bisa dihapus performanya.',
+            ], 422);
+        }
+
+        Performance::query()
+            ->where('user_id', $validated['user_id'])
+            ->where('period_id', $validated['period_id'])
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data performa berhasil dihapus.',
+        ]);
+    }
+
+    private function saveGroup(Request $request, bool $isUpdate): JsonResponse
     {
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
@@ -112,12 +160,23 @@ class PerformanceController extends Controller
         ]);
 
         $period = Period::findOrFail($validated['period_id']);
-
         if ($period->is_finalized) {
             return response()->json([
                 'success' => false,
-                'message' => 'Cannot update finalized period data',
-            ], 403);
+                'message' => 'Periode yang sudah selesai tidak bisa diubah.',
+            ], 422);
+        }
+
+        $existingCount = Performance::query()
+            ->where('user_id', $validated['user_id'])
+            ->where('period_id', $validated['period_id'])
+            ->count();
+
+        if (! $isUpdate && $existingCount > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data performa user pada periode tersebut sudah ada. Gunakan edit.',
+            ], 409);
         }
 
         DB::transaction(function () use ($validated) {
@@ -137,177 +196,9 @@ class PerformanceController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Performance matrix updated',
+            'message' => $isUpdate
+                ? 'Data performa berhasil diperbarui.'
+                : 'Data performa berhasil ditambahkan.',
         ]);
-    }
-
-    /**
-     * GET /api/performances/{id}
-     */
-    public function show($id): JsonResponse
-    {
-        try {
-            $performance = Performance::with(['user', 'criteria', 'period'])
-                ->find($id);
-
-            if (!$performance) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Performance not found',
-                ], 404);
-            }
-
-            return response()->json([
-                'success' => true,
-                'data' => $performance,
-            ], 200);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error fetching data',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * POST /api/performances
-     */
-    public function store(Request $request): JsonResponse
-    {
-        try {
-            $validated = $request->validate([
-                'user_id' => 'required|exists:users,id',
-                'criteria_id' => 'required|exists:criterias,id',
-                'period_id' => 'required|exists:periods,id',
-                'score' => 'required|numeric|min:0|max:100',
-            ]);
-
-            $period = Period::find($validated['period_id']);
-            if ($period->is_finalized) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot add performance to finalized period',
-                ], 403);
-            }
-
-            $exists = Performance::where([
-                'user_id' => $validated['user_id'],
-                'criteria_id' => $validated['criteria_id'],
-                'period_id' => $validated['period_id'],
-            ])->exists();
-
-            if ($exists) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Performance already exists for this combination',
-                ], 409);
-            }
-
-            $performance = Performance::create($validated);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Performance created',
-                'data' => $performance,
-            ], 201);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation error',
-                'errors' => $e->errors(),
-            ], 422);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create performance',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * PATCH /api/performances/{id}
-     */
-    public function update(Request $request, $id): JsonResponse
-    {
-        try {
-            $performance = Performance::find($id);
-
-            if (!$performance) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Performance not found',
-                ], 404);
-            }
-
-            if ($performance->period->is_finalized) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot update finalized period data',
-                ], 403);
-            }
-
-            $validated = $request->validate([
-                'score' => 'sometimes|required|numeric|min:0|max:100',
-            ]);
-
-            $performance->update($validated);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Performance updated',
-                'data' => $performance,
-            ], 200);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation error',
-                'errors' => $e->errors(),
-            ], 422);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update performance',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * DELETE /api/performances/{id}
-     */
-    public function destroy($id): JsonResponse
-    {
-        try {
-            $performance = Performance::find($id);
-
-            if (!$performance) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Performance not found',
-                ], 404);
-            }
-
-            if ($performance->period->is_finalized) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot delete finalized data',
-                ], 403);
-            }
-
-            $performance->delete();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Performance deleted',
-            ], 200);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete performance',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
     }
 }

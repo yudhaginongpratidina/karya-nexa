@@ -4,115 +4,101 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Http\Request;
 
 class CategoryController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(): JsonResponse
     {
         $categories = Category::query()
-            ->select(['id', 'name', 'weight', 'created_at'])
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
+            ->withCount('criterias')
+            ->orderBy('name')
+            ->get();
 
         return response()->json([
-            'status' => 'success',
-            'data' => $categories
-        ], 200);
+            'success' => true,
+            'data' => $categories,
+        ]);
     }
 
-    public function show($id): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $category = Category::find($id);
+        $category = Category::query()
+            ->withCount('criterias')
+            ->find($id);
 
-        if (!$category) {
+        if (! $category) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Category not found'
+                'success' => false,
+                'message' => 'Kategori tidak ditemukan.',
             ], 404);
         }
 
         return response()->json([
-            'status' => 'success',
-            'data' => $category
-        ], 200);
+            'success' => true,
+            'data' => $category,
+        ]);
     }
 
     public function store(Request $request): JsonResponse
     {
-        try {
-            $validated = $request->validate([
-                'name' => 'required|string|max:255|unique:categories,name',
-                'weight' => 'required|numeric|min:0|max:999999.99'
-            ]);
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:categories,name',
+        ]);
 
-            $category = Category::create($validated);
+        $category = Category::create([
+            'name' => $validated['name'],
+            'weight' => 0,
+        ]);
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Category created',
-                'data' => $category
-            ], 201);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Validation error',
-                'errors' => $e->errors()
-            ], 422);
-        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Kategori berhasil ditambahkan.',
+            'data' => $category,
+        ], 201);
     }
 
-    public function update(Request $request, $id): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
         $category = Category::find($id);
 
-        if (!$category) {
+        if (! $category) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Category not found'
+                'success' => false,
+                'message' => 'Kategori tidak ditemukan.',
             ], 404);
         }
 
-        try {
-            $validated = $request->validate([
-                'name' => 'sometimes|required|string|max:255|unique:categories,name,' . $id,
-                'weight' => 'sometimes|required|numeric|min:0|max:999999.99'
-            ]);
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:categories,name,' . $id,
+        ]);
 
-            $category->update($validated);
+        $category->update($validated);
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Category updated',
-                'data' => $category
-            ], 200);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Validation error',
-                'errors' => $e->errors()
-            ], 422);
-        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Kategori berhasil diperbarui.',
+            'data' => $category->fresh(),
+        ]);
     }
 
-    public function destroy($id): JsonResponse
+    public function destroy(int $id): JsonResponse
     {
         $category = Category::find($id);
 
-        if (!$category) {
+        if (! $category) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Category not found'
+                'success' => false,
+                'message' => 'Kategori tidak ditemukan.',
             ], 404);
         }
 
         $category->delete();
 
         return response()->json([
-            'status' => 'success',
-            'message' => 'Category deleted'
-        ], 200);
+            'success' => true,
+            'message' => 'Kategori berhasil dihapus.',
+        ]);
     }
 }
