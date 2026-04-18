@@ -153,8 +153,21 @@ function showConfirmModal({ title, description, confirmLabel = 'Lanjutkan', onCo
             {
                 label: confirmLabel,
                 variant,
-                onClick: async () => {
-                    await onConfirm();
+                onClick: async (event) => {
+                    const confirmButton = event.currentTarget;
+                    const loadingLabel = `${confirmLabel}...`;
+
+                    setModalLoading(true, loadingLabel);
+                    setButtonBusy(confirmButton, true, confirmLabel, loadingLabel);
+
+                    try {
+                        await onConfirm();
+                    } finally {
+                        if (state.modalState) {
+                            setModalLoading(false);
+                            setButtonBusy(confirmButton, false, confirmLabel, loadingLabel);
+                        }
+                    }
                 },
             },
         ],
@@ -184,7 +197,29 @@ function setButtonBusy(button, isBusy, idleLabel, busyLabel = 'Memproses...') {
     if (!button) return;
 
     button.disabled = isBusy;
-    button.textContent = isBusy ? busyLabel : idleLabel;
+    button.classList.toggle('is-busy', isBusy);
+    button.dataset.idleLabel = idleLabel;
+    button.dataset.busyLabel = busyLabel;
+    button.innerHTML = isBusy
+        ? `<span class="btn-spinner" aria-hidden="true"></span><span>${escapeHtml(busyLabel)}</span>`
+        : `<span>${escapeHtml(idleLabel)}</span>`;
+}
+
+function setModalLoading(isLoading, loadingText = 'Memproses data...') {
+    const modalCard = modalRoot.querySelector('.modal-card');
+    const modalCloseButton = modalRoot.querySelector('[data-modal-close]');
+
+    if (!modalCard) return;
+
+    modalCard.classList.toggle('is-loading', isLoading);
+    modalCard.dataset.loadingText = loadingText;
+    modalCloseButton?.toggleAttribute('disabled', isLoading);
+
+    modalRoot.querySelectorAll('[data-modal-action]').forEach((button) => {
+        if (button !== modalCloseButton) {
+            button.disabled = isLoading;
+        }
+    });
 }
 
 function renderTabs() {
@@ -847,27 +882,31 @@ async function renderCriteriasTab() {
     });
 }
 
-function buildPerformanceFormBody(options, selectedUserId = '', selectedPeriodId = '', groupData = null) {
+function buildPerformanceFormBody(options, selectedUserId = '', selectedPeriodId = '', groupData = null, lockSelection = false) {
     const users = options.users || [];
     const periods = options.periods || [];
     const categories = groupData?.rows || options.categories || [];
+    const userFieldName = lockSelection ? 'user_id_display' : 'user_id';
+    const periodFieldName = lockSelection ? 'period_id_display' : 'period_id';
 
     return `
         <form id="performance-form" class="modal-form">
             <div class="two-col">
                 ${createLabeledSelect({
                     label: 'User yang Dinilai',
-                    name: 'user_id',
+                    name: userFieldName,
                     value: selectedUserId,
                     options: [{ value: '', label: 'Pilih user' }, ...users.map((item) => ({ value: item.id, label: item.name }))],
                 })}
                 ${createLabeledSelect({
                     label: 'Periode',
-                    name: 'period_id',
+                    name: periodFieldName,
                     value: selectedPeriodId,
                     options: [{ value: '', label: 'Pilih periode' }, ...periods.map((item) => ({ value: item.id, label: item.period_name }))],
                 })}
             </div>
+            ${lockSelection ? `<input type="hidden" name="user_id" value="${escapeHtml(selectedUserId)}">` : ''}
+            ${lockSelection ? `<input type="hidden" name="period_id" value="${escapeHtml(selectedPeriodId)}">` : ''}
 
             <div class="form-stack">
                 ${categories
@@ -913,14 +952,20 @@ function buildPerformanceFormBody(options, selectedUserId = '', selectedPeriodId
 
 function extractPerformancePayload(form) {
     const formData = new FormData(form);
-    const userId = Number(formData.get('user_id'));
-    const periodId = Number(formData.get('period_id'));
+    const userId = Number(formData.get('user_id') || form.querySelector('[name="user_id_display"]')?.value || 0);
+    const periodId = Number(formData.get('period_id') || form.querySelector('[name="period_id_display"]')?.value || 0);
     const scores = Array.from(form.querySelectorAll('[data-criteria-id]')).map((input) => ({
         criteria_id: Number(input.getAttribute('data-criteria-id')),
         score: Number(input.value),
     }));
 
     return { user_id: userId, period_id: periodId, scores };
+}
+
+function hasExistingPerformance(groupData) {
+    return (groupData?.rows || []).some((category) =>
+        (category.criterias || []).some((criteria) => criteria.score !== null && criteria.score !== '')
+    );
 }
 
 async function openPerformanceForm(mode, row = null) {
@@ -945,7 +990,7 @@ async function openPerformanceForm(mode, row = null) {
             mode === 'create'
                 ? 'Isi user, periode, lalu masukkan nilai untuk setiap kriteria yang tampil.'
                 : 'Perbarui nilai performa user pada periode yang dipilih.',
-        body: buildPerformanceFormBody(options, row?.user_id || '', row?.period_id || '', groupData),
+        body: buildPerformanceFormBody(options, row?.user_id || '', row?.period_id || '', groupData, mode !== 'create'),
         actions: [
             { label: 'Batal', variant: 'btn-ghost', onClick: closeModal },
             {
@@ -986,8 +1031,8 @@ async function openPerformanceForm(mode, row = null) {
     });
 
     const form = document.getElementById('performance-form');
-    const userSelect = form.querySelector('[name="user_id"]');
-    const periodSelect = form.querySelector('[name="period_id"]');
+    const userSelect = form.querySelector(mode === 'create' ? '[name="user_id"]' : '[name="user_id_display"]');
+    const periodSelect = form.querySelector(mode === 'create' ? '[name="period_id"]' : '[name="period_id_display"]');
 
     if (mode === 'create') {
         const refreshCriteria = async () => {
@@ -1001,7 +1046,7 @@ async function openPerformanceForm(mode, row = null) {
                 url: `/api/performances/group?user_id=${userId}&period_id=${periodId}`,
             }, { silent: true });
 
-            if (groupResponse?.data?.rows) {
+            if (hasExistingPerformance(groupResponse?.data)) {
                 openPerformanceForm('edit', { user_id: userId, period_id: periodId });
             }
         };
