@@ -1,0 +1,112 @@
+@startuml
+title Auth Service - Sequence Diagram
+
+actor User
+participant "Laravel Router\nroutes/api.php" as Router
+participant "auth:sanctum\nMiddleware" as Sanctum
+participant "AuthController" as Controller
+participant "Validator" as Validator
+participant "User Model" as UserModel
+participant "Hash" as Hash
+participant "Sanctum Token" as Token
+database "Database" as DB
+
+== Register ==
+User -> Router: POST /api/auth/register\n{name, password}
+Router -> Controller: register(Request)
+Controller -> Validator: validate name, password min:8
+alt validation failed
+    Validator --> Controller: ValidationException
+    Controller --> User: 422 JSON\nsuccess=false, errors
+else validation passed
+    Controller -> DB: begin transaction
+    Controller -> UserModel: count email LIKE slug(name)%@gmail.com
+    UserModel -> DB: SELECT COUNT(*)
+    DB --> UserModel: count
+    UserModel --> Controller: generated unique email
+    Controller -> Hash: make(password)
+    Hash --> Controller: hashed password
+    Controller -> UserModel: create(name, email, password, role=user,\nmust_change_password=false)
+    UserModel -> DB: INSERT users
+    DB --> UserModel: created user
+    UserModel --> Controller: User
+    Controller -> Token: createToken("auth_token")
+    Token -> DB: INSERT personal_access_tokens
+    DB --> Token: plainTextToken
+    Controller -> DB: commit transaction
+    Controller --> User: 201 JSON\nsuccess=true, data.user, data.token
+end
+
+== Login ==
+User -> Router: POST /api/auth/login\n{email, password}
+Router -> Controller: login(Request)
+Controller -> Validator: validate email, password
+alt validation failed
+    Validator --> Controller: ValidationException
+    Controller --> User: 422 JSON\nsuccess=false, errors
+else validation passed
+    Controller -> UserModel: where(email).first()
+    UserModel -> DB: SELECT user by email
+    DB --> UserModel: user or null
+    UserModel --> Controller: user or null
+    alt user not found or password invalid
+        Controller -> Hash: check(password, user.password)
+        Hash --> Controller: false
+        Controller --> User: 401 JSON\nsuccess=false, message="Invalid credentials"
+    else credentials valid
+        Controller -> Hash: check(password, user.password)
+        Hash --> Controller: true
+        Controller -> Token: createToken("auth_token")
+        Token -> DB: INSERT personal_access_tokens
+        DB --> Token: plainTextToken
+        Controller --> User: 200 JSON\nsuccess=true, data.user, token,\nmust_change_password
+    end
+end
+
+== Protected Auth Actions ==
+User -> Router: GET /api/auth/me\nPOST /api/auth/logout\nPOST /api/auth/force-change-password\nPOST /api/auth/update-password
+Router -> Sanctum: verify bearer token
+alt token missing or invalid
+    Sanctum --> User: 401 JSON unauthenticated
+else token valid
+    Sanctum -> Controller: call selected auth action with authenticated user
+    alt me
+        Controller --> User: 200 JSON\nsuccess=true, data=current user
+    else logout
+        Controller -> Token: user.tokens().delete()
+        Token -> DB: DELETE personal_access_tokens
+        Controller --> User: 200 JSON\nsuccess=true, message="Logged out"
+    else forceChangePassword
+        Controller -> Controller: ensure must_change_password=true
+        alt not required
+            Controller --> User: 422 JSON\npassword tidak wajib diganti
+        else required
+            Controller -> Validator: validate password confirmed min:8
+            Controller -> Hash: check(new password, current hash)
+            alt same as default/current
+                Controller --> User: 422 JSON\npassword baru harus berbeda
+            else valid new password
+                Controller -> UserModel: update password,\nmust_change_password=false
+                UserModel -> DB: UPDATE users
+                Controller --> User: 200 JSON\nsuccess=true, fresh user
+            end
+        end
+    else updatePassword
+        Controller -> Validator: validate current_password,\npassword confirmed min:8
+        Controller -> Hash: check(current_password, user.password)
+        alt current password invalid
+            Controller --> User: 422 JSON\npassword saat ini tidak sesuai
+        else current password valid
+            Controller -> Hash: check(new password, user.password)
+            alt new password same as current
+                Controller --> User: 422 JSON\npassword baru harus berbeda
+            else valid new password
+                Controller -> UserModel: update password,\nmust_change_password=false
+                UserModel -> DB: UPDATE users
+                Controller --> User: 200 JSON\nsuccess=true, fresh user
+            end
+        end
+    end
+end
+
+@enduml

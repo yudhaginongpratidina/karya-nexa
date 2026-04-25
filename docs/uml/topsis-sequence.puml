@@ -1,0 +1,102 @@
+@startuml
+title TOPSIS Service - Sequence Diagram
+
+actor Client
+participant "Laravel Router" as Router
+participant "auth:sanctum" as Sanctum
+participant "RoleMiddleware\nadmin or admin,user" as Role
+participant "TopsisController" as Controller
+participant "Validator" as Validator
+participant "Period Model" as Period
+participant "Criteria Model" as Criteria
+participant "Performance Model" as Performance
+participant "User Model" as UserModel
+participant "TopsisResult Model" as Result
+database "Database" as DB
+
+Client -> Router: /api/topsis/*
+Router -> Sanctum: validate token
+Sanctum -> Role: check role\nadmin for preview/calculate/delete,\nadmin/user for index/show
+alt unauthorized or forbidden
+    Sanctum --> Client: 401 JSON
+    Role --> Client: 403 JSON
+else allowed
+    Role -> Controller: dispatch action
+
+    alt GET /topsis/preview
+        Controller -> Validator: validate period_id exists
+        Controller -> Controller: buildDataset(period_id)
+        Controller -> Criteria: load all criteria order by id
+        Criteria -> DB: SELECT criterias
+        alt criteria empty
+            Controller --> Client: 422 JSON Kriteria belum tersedia
+        else criteria available
+            Controller -> UserModel: join performances by period,\ndistinct users
+            UserModel -> DB: SELECT users with performance
+            alt no users
+                Controller --> Client: 422 JSON belum ada performa
+            else users found
+                Controller -> Performance: buildDecisionMatrix()
+                Performance -> DB: SELECT scores by period,user,criteria
+                alt missing score
+                    Controller --> Client: 422 JSON nilai performa belum lengkap
+                else complete
+                    Controller -> Period: select period
+                    Period -> DB: SELECT period
+                    Controller --> Client: 200 JSON dataset preview
+                end
+            end
+        end
+    else POST /topsis/calculate
+        Controller -> Validator: validate period_id exists
+        Controller -> DB: begin transaction
+        Controller -> Period: findOrFail(period_id)
+        alt period finalized
+            Controller -> DB: rollBack
+            Controller --> Client: 422 JSON periode sudah selesai dihitung
+        else not finalized
+            Controller -> Controller: calculateTopsis(period_id)
+            Controller -> Controller: buildDataset, normalize weights,\nnormalize decision matrix,\nweighted matrix, ideal solutions,\npreference scores, ranking
+            alt invalid dataset/calculation
+                Controller -> DB: rollBack
+                Controller --> Client: 422 JSON calculation message
+            else success
+                Controller -> Result: delete old results by period
+                Result -> DB: DELETE topsis_results
+                loop each ranked result
+                    Controller -> Result: create user_id, period_id,\npreference_value, rank
+                    Result -> DB: INSERT topsis_results
+                end
+                Controller -> Period: update is_finalized=true
+                Period -> DB: UPDATE periods
+                Controller -> DB: commit
+                Controller --> Client: 200 JSON results + meta
+            end
+        end
+    else GET /topsis
+        Controller -> Period: whereHas(topsisResults)\nwithCount results
+        Period -> DB: SELECT periods
+        Controller --> Client: 200 JSON periods
+    else GET /topsis/period/{periodId}
+        Controller -> Period: with topsisResults.user\nfind(periodId)
+        Period -> DB: SELECT period + results
+        alt period missing or results empty
+            Controller --> Client: 404 JSON hasil tidak ditemukan
+        else found
+            Controller --> Client: 200 JSON period + ranked results
+        end
+    else DELETE /topsis/period/{periodId}
+        Controller -> Period: find(periodId)
+        alt period not found
+            Controller --> Client: 404 JSON periode tidak ditemukan
+        else found
+            Controller -> Result: delete where period_id
+            Result -> DB: DELETE topsis_results
+            Controller -> Period: update is_finalized=false
+            Period -> DB: UPDATE periods
+            Controller --> Client: 200 JSON hasil dihapus dan periode dibuka
+        end
+    end
+end
+
+@enduml

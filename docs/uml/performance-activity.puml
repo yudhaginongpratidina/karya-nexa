@@ -1,0 +1,59 @@
+@startuml
+title Performance Service - Activity Diagram
+
+start
+:Admin request /api/performances;
+:Router -> auth:sanctum -> role:admin;
+if (tidak lolos auth/role?) then (yes)
+    :Return 401 atau 403 JSON;
+    stop
+endif
+
+if (GET index?) then (yes)
+    :Ambil optional period_id;
+    :Group performances by user dan period;
+    :Hitung criteria_count dan average_score;
+    :Load meta periods;
+    :Return 200 JSON;
+elseif (GET form-options?) then (yes)
+    :Load users role=user;
+    :Load periods;
+    :Load categories with criterias;
+    :Return 200 JSON;
+elseif (GET group?) then (yes)
+    :Validate user_id dan period_id;
+    :Load period;
+    :Load kategori, kriteria, dan nilai performance existing;
+    :Susun rows per kategori;
+    :Return 200 JSON detail group;
+elseif (POST store atau PATCH update?) then (yes)
+    :Validate user_id, period_id, scores;
+    :Load period;
+    if (period finalized?) then (yes)
+        :Return 422 JSON;
+        stop
+    endif
+    :Hitung existing performance user+period;
+    if (POST store dan data sudah ada?) then (yes)
+        :Return 409 JSON;
+        stop
+    endif
+    :Begin DB transaction;
+    repeat
+        :updateOrCreate performance per criteria;
+    repeat while (masih ada score?)
+    :Commit transaction;
+    :Return 200 JSON berhasil;
+else (DELETE group)
+    :Validate user_id dan period_id;
+    :Load period;
+    if (period finalized?) then (yes)
+        :Return 422 JSON;
+    else (editable)
+        :Delete performance by user+period;
+        :Return 200 JSON;
+    endif
+endif
+stop
+
+@enduml

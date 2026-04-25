@@ -1,0 +1,79 @@
+@startuml
+title Auth Service - Activity Diagram
+
+start
+:User mengirim request ke endpoint auth;
+:Laravel Router mencocokkan route;
+
+if (Endpoint public?) then (login/register)
+    if (register?) then (yes)
+        :Validasi name dan password;
+        if (validasi gagal?) then (yes)
+            :Return 422 JSON errors;
+            stop
+        endif
+        :Generate email unik dari slug nama;
+        :Hash password;
+        :Create user role=user;
+        :Create Sanctum token;
+        :Return 201 JSON user + token;
+        stop
+    else (login)
+        :Validasi email dan password;
+        if (validasi gagal?) then (yes)
+            :Return 422 JSON errors;
+            stop
+        endif
+        :Cari user berdasarkan email;
+        if (user tidak ada atau password salah?) then (yes)
+            :Return 401 JSON Invalid credentials;
+            stop
+        endif
+        :Create Sanctum token;
+        :Return 200 JSON user + token + must_change_password;
+        stop
+    endif
+else (protected)
+    :auth:sanctum memvalidasi bearer token;
+    if (token invalid?) then (yes)
+        :Return 401 JSON unauthenticated;
+        stop
+    endif
+    if (GET /auth/me?) then (yes)
+        :Ambil authenticated user dari request;
+        :Return 200 JSON current user;
+        stop
+    elseif (POST /auth/logout?) then (yes)
+        :Hapus semua token milik user;
+        :Return 200 JSON Logged out;
+        stop
+    elseif (POST /auth/force-change-password?) then (yes)
+        if (must_change_password false?) then (yes)
+            :Return 422 JSON tidak wajib ganti password;
+            stop
+        endif
+        :Validasi password confirmed;
+        if (password baru sama dengan password lama?) then (yes)
+            :Return 422 JSON password harus berbeda;
+            stop
+        endif
+        :Update password dan set must_change_password=false;
+        :Return 200 JSON fresh user;
+        stop
+    else (POST /auth/update-password)
+        :Validasi current_password dan password confirmed;
+        if (current_password salah?) then (yes)
+            :Return 422 JSON password saat ini tidak sesuai;
+            stop
+        endif
+        if (password baru sama dengan password saat ini?) then (yes)
+            :Return 422 JSON password baru harus berbeda;
+            stop
+        endif
+        :Update password dan set must_change_password=false;
+        :Return 200 JSON fresh user;
+        stop
+    endif
+endif
+
+@enduml

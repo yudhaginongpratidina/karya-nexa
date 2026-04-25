@@ -1,0 +1,64 @@
+@startuml
+title Category Service - Sequence Diagram
+
+actor Admin
+participant "Laravel Router" as Router
+participant "auth:sanctum" as Sanctum
+participant "RoleMiddleware\nrole:admin" as Role
+participant "CategoryController" as Controller
+participant "Validator" as Validator
+participant "Category Model" as Category
+database "Database" as DB
+
+Admin -> Router: /api/categories/*
+Router -> Sanctum: validate bearer token
+Sanctum -> Role: check admin role
+alt unauthorized or forbidden
+    Sanctum --> Admin: 401 JSON
+    Role --> Admin: 403 JSON
+else allowed
+    Role -> Controller: dispatch action
+    alt GET /categories
+        Controller -> Category: withCount(criterias).orderBy(name).get()
+        Category -> DB: SELECT categories + criterias_count
+        Controller --> Admin: 200 JSON categories
+    else GET /categories/{id}
+        Controller -> Category: withCount(criterias).find(id)
+        Category -> DB: SELECT category
+        alt not found
+            Controller --> Admin: 404 JSON kategori tidak ditemukan
+        else found
+            Controller --> Admin: 200 JSON category
+        end
+    else POST /categories
+        Controller -> Validator: validate unique name
+        alt validation failed
+            Controller --> Admin: 422 JSON validation errors
+        else valid
+            Controller -> Category: create(name, weight=0)
+            Category -> DB: INSERT categories
+            Controller --> Admin: 201 JSON category
+        end
+    else PATCH /categories/{id}
+        Controller -> Category: find(id)
+        alt not found
+            Controller --> Admin: 404 JSON kategori tidak ditemukan
+        else found
+            Controller -> Validator: validate unique name except id
+            Controller -> Category: update(name)
+            Category -> DB: UPDATE categories
+            Controller --> Admin: 200 JSON fresh category
+        end
+    else DELETE /categories/{id}
+        Controller -> Category: find(id)
+        alt not found
+            Controller --> Admin: 404 JSON kategori tidak ditemukan
+        else found
+            Controller -> Category: delete()
+            Category -> DB: DELETE categories
+            Controller --> Admin: 200 JSON success
+        end
+    end
+end
+
+@enduml

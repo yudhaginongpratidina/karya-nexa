@@ -1,0 +1,67 @@
+@startuml
+title Criteria Service - Sequence Diagram
+
+actor Admin
+participant "Laravel Router" as Router
+participant "auth:sanctum" as Sanctum
+participant "RoleMiddleware\nrole:admin" as Role
+participant "CriteriaController" as Controller
+participant "Validator" as Validator
+participant "Criteria Model" as Criteria
+participant "Category Model" as Category
+database "Database" as DB
+
+Admin -> Router: /api/criterias/*
+Router -> Sanctum: validate token
+Sanctum -> Role: check admin role
+alt unauthorized or forbidden
+    Sanctum --> Admin: 401 JSON
+    Role --> Admin: 403 JSON
+else allowed
+    Role -> Controller: dispatch action
+    alt GET /criterias?category_id=
+        Controller -> Criteria: with(category).optional where category_id
+        Criteria -> DB: SELECT criterias
+        Controller -> Category: select id,name orderBy name
+        Category -> DB: SELECT categories
+        Controller --> Admin: 200 JSON criterias + meta categories
+    else GET /criterias/{id}
+        Controller -> Criteria: with(category).find(id)
+        Criteria -> DB: SELECT criteria
+        alt not found
+            Controller --> Admin: 404 JSON kriteria tidak ditemukan
+        else found
+            Controller --> Admin: 200 JSON criteria
+        end
+    else POST /criterias
+        Controller -> Validator: validate category exists,\nname,type,weight
+        alt validation failed
+            Controller --> Admin: 422 JSON validation errors
+        else valid
+            Controller -> Criteria: create category_id,name,type,weight default 1
+            Criteria -> DB: INSERT criterias
+            Controller --> Admin: 201 JSON criteria with category
+        end
+    else PATCH /criterias/{id}
+        Controller -> Criteria: find(id)
+        alt not found
+            Controller --> Admin: 404 JSON kriteria tidak ditemukan
+        else found
+            Controller -> Validator: validate category exists,\nname,type,weight
+            Controller -> Criteria: update fields
+            Criteria -> DB: UPDATE criterias
+            Controller --> Admin: 200 JSON fresh criteria with category
+        end
+    else DELETE /criterias/{id}
+        Controller -> Criteria: find(id)
+        alt not found
+            Controller --> Admin: 404 JSON kriteria tidak ditemukan
+        else found
+            Controller -> Criteria: delete()
+            Criteria -> DB: DELETE criterias
+            Controller --> Admin: 200 JSON success
+        end
+    end
+end
+
+@enduml

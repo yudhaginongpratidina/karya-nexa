@@ -1,0 +1,54 @@
+@startuml
+title Category Service - Activity Diagram
+
+start
+:Admin request /api/categories;
+:Router -> auth:sanctum -> role:admin;
+if (token invalid?) then (yes)
+    :Return 401 JSON;
+    stop
+elseif (bukan admin?) then (yes)
+    :Return 403 JSON;
+    stop
+endif
+
+if (GET index?) then (yes)
+    :Load categories with criterias_count;
+    :Order by name;
+    :Return 200 JSON;
+elseif (GET show?) then (yes)
+    :Find category by id with criterias_count;
+    if (not found?) then (yes)
+        :Return 404 JSON;
+    else (found)
+        :Return 200 JSON;
+    endif
+elseif (POST store?) then (yes)
+    :Validate unique name;
+    if (invalid?) then (yes)
+        :Return 422 JSON;
+    else (valid)
+        :Create category weight=0;
+        :Return 201 JSON;
+    endif
+elseif (PATCH update?) then (yes)
+    :Find category by id;
+    if (not found?) then (yes)
+        :Return 404 JSON;
+    else (found)
+        :Validate unique name except current id;
+        :Update category;
+        :Return 200 JSON;
+    endif
+else (DELETE destroy)
+    :Find category by id;
+    if (not found?) then (yes)
+        :Return 404 JSON;
+    else (found)
+        :Delete category;
+        :Return 200 JSON;
+    endif
+endif
+stop
+
+@enduml

@@ -1,0 +1,57 @@
+@startuml
+title Period Service - Activity Diagram
+
+start
+:Client request /api/periods;
+:Router -> auth:sanctum;
+if (token invalid?) then (yes)
+    :Return 401 JSON;
+    stop
+endif
+:RoleMiddleware cek hak akses;
+if (role tidak sesuai?) then (yes)
+    :Return 403 JSON;
+    stop
+endif
+
+if (GET index?) then (yes)
+    :Load periods with performances_count dan topsis_results_count;
+    :Return 200 JSON;
+elseif (GET show?) then (yes)
+    :Find period by id with counts;
+    if (not found?) then (yes)
+        :Return 404 JSON;
+    else (found)
+        :Return 200 JSON;
+    endif
+elseif (POST store?) then (yes)
+    :Validate unique period_name;
+    if (invalid?) then (yes)
+        :Return 422 JSON;
+    else (valid)
+        :Create period is_finalized=false;
+        :Return 201 JSON;
+    endif
+elseif (PATCH update?) then (yes)
+    :Find period by id;
+    if (not found?) then (yes)
+        :Return 404 JSON;
+    elseif (is_finalized true?) then (yes)
+        :Return 422 JSON tidak bisa diedit;
+    else (editable)
+        :Validate unique period_name except current id;
+        :Update period;
+        :Return 200 JSON;
+    endif
+else (DELETE destroy)
+    :Find period by id;
+    if (not found?) then (yes)
+        :Return 404 JSON;
+    else (found)
+        :Delete period;
+        :Return 200 JSON;
+    endif
+endif
+stop
+
+@enduml

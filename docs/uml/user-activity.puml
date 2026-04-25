@@ -1,0 +1,69 @@
+@startuml
+title User Service - Activity Diagram
+
+start
+:Admin mengirim request /api/users;
+:Router mencocokkan route users;
+:auth:sanctum validasi token;
+if (token invalid?) then (yes)
+    :Return 401 JSON;
+    stop
+endif
+:RoleMiddleware cek role admin;
+if (bukan admin?) then (yes)
+    :Return 403 JSON Forbidden;
+    stop
+endif
+
+if (GET index?) then (yes)
+    :Query daftar user ordered by name;
+    :Return 200 JSON users + default_password;
+elseif (GET show?) then (yes)
+    :Cari user by id;
+    if (tidak ditemukan?) then (yes)
+        :Return 404 JSON;
+    else (found)
+        :Return 200 JSON user;
+    endif
+elseif (POST store?) then (yes)
+    :Validasi name dan role;
+    if (validasi gagal?) then (yes)
+        :Return 422 JSON;
+    else (valid)
+        :Generate email unik;
+        :Hash password default 12345678;
+        :Create user must_change_password=true;
+        :Return 201 JSON user + meta default password;
+    endif
+elseif (PATCH update?) then (yes)
+    :Validasi name dan role;
+    :Cari user by id;
+    if (tidak ditemukan?) then (yes)
+        :Return 404 JSON;
+    else (found)
+        :Update name dan role;
+        :Return 200 JSON fresh user;
+    endif
+elseif (PATCH reset-password?) then (yes)
+    :Cari user by id;
+    if (tidak ditemukan?) then (yes)
+        :Return 404 JSON;
+    else (found)
+        :Hash password default;
+        :Set must_change_password=true;
+        :Return 200 JSON message + meta default password;
+    endif
+else (DELETE destroy)
+    :Cari user by id;
+    if (tidak ditemukan?) then (yes)
+        :Return 404 JSON;
+    elseif (id sama dengan user login?) then (yes)
+        :Return 422 JSON akun sendiri tidak bisa dihapus;
+    else (allowed)
+        :Delete user;
+        :Return 200 JSON success;
+    endif
+endif
+stop
+
+@enduml

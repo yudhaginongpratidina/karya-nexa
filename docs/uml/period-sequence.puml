@@ -1,0 +1,69 @@
+@startuml
+title Period Service - Sequence Diagram
+
+actor Client
+participant "Laravel Router" as Router
+participant "auth:sanctum" as Sanctum
+participant "RoleMiddleware\nrole:admin or role:admin,user" as Role
+participant "PeriodController" as Controller
+participant "Validator" as Validator
+participant "Period Model" as Period
+database "Database" as DB
+
+Client -> Router: /api/periods/*
+Router -> Sanctum: validate token
+alt token invalid
+    Sanctum --> Client: 401 JSON
+else authenticated
+    Sanctum -> Role: check role\nadmin for CRUD, admin/user for index
+    alt role forbidden
+        Role --> Client: 403 JSON
+    else allowed
+        Role -> Controller: dispatch action
+        alt GET /periods
+            Controller -> Period: withCount(performances,topsisResults)\norderByDesc(created_at).get()
+            Period -> DB: SELECT periods + counts
+            Controller --> Client: 200 JSON periods
+        else GET /periods/{id}
+            Controller -> Period: withCount(...).find(id)
+            Period -> DB: SELECT period
+            alt not found
+                Controller --> Client: 404 JSON periode tidak ditemukan
+            else found
+                Controller --> Client: 200 JSON period
+            end
+        else POST /periods
+            Controller -> Validator: validate unique period_name
+            alt validation failed
+                Controller --> Client: 422 JSON validation errors
+            else valid
+                Controller -> Period: create(period_name,is_finalized=false)
+                Period -> DB: INSERT periods
+                Controller --> Client: 201 JSON period
+            end
+        else PATCH /periods/{id}
+            Controller -> Period: find(id)
+            alt not found
+                Controller --> Client: 404 JSON periode tidak ditemukan
+            else is_finalized true
+                Controller --> Client: 422 JSON periode selesai tidak bisa diedit
+            else editable
+                Controller -> Validator: validate unique period_name except id
+                Controller -> Period: update(period_name)
+                Period -> DB: UPDATE periods
+                Controller --> Client: 200 JSON fresh period
+            end
+        else DELETE /periods/{id}
+            Controller -> Period: find(id)
+            alt not found
+                Controller --> Client: 404 JSON periode tidak ditemukan
+            else found
+                Controller -> Period: delete()
+                Period -> DB: DELETE periods
+                Controller --> Client: 200 JSON success
+            end
+        end
+    end
+end
+
+@enduml

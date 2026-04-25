@@ -1,0 +1,53 @@
+@startuml
+title Criteria Service - Activity Diagram
+
+start
+:Admin request /api/criterias;
+:Router -> auth:sanctum -> role:admin;
+if (tidak lolos auth/role?) then (yes)
+    :Return 401 atau 403 JSON;
+    stop
+endif
+
+if (GET index?) then (yes)
+    :Ambil optional category_id dari query;
+    :Query criteria dengan category;
+    :Filter category_id jika ada;
+    :Load meta categories;
+    :Return 200 JSON;
+elseif (GET show?) then (yes)
+    :Find criteria with category by id;
+    if (not found?) then (yes)
+        :Return 404 JSON;
+    else (found)
+        :Return 200 JSON;
+    endif
+elseif (POST store?) then (yes)
+    :Validate category_id exists, name, type, weight;
+    if (invalid?) then (yes)
+        :Return 422 JSON;
+    else (valid)
+        :Create criteria dengan weight default 1 bila kosong;
+        :Return 201 JSON;
+    endif
+elseif (PATCH update?) then (yes)
+    :Find criteria by id;
+    if (not found?) then (yes)
+        :Return 404 JSON;
+    else (found)
+        :Validate payload;
+        :Update criteria;
+        :Return 200 JSON fresh criteria;
+    endif
+else (DELETE destroy)
+    :Find criteria by id;
+    if (not found?) then (yes)
+        :Return 404 JSON;
+    else (found)
+        :Delete criteria;
+        :Return 200 JSON;
+    endif
+endif
+stop
+
+@enduml

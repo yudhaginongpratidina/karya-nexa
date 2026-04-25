@@ -1,0 +1,73 @@
+@startuml
+title Performance Service - Sequence Diagram
+
+actor Admin
+participant "Laravel Router" as Router
+participant "auth:sanctum" as Sanctum
+participant "RoleMiddleware\nrole:admin" as Role
+participant "PerformanceController" as Controller
+participant "Validator" as Validator
+participant "Performance Model" as Performance
+participant "Period Model" as Period
+participant "Category/Criteria/User Models" as MasterData
+database "Database" as DB
+
+Admin -> Router: /api/performances/*
+Router -> Sanctum: validate token
+Sanctum -> Role: check admin
+alt unauthorized or forbidden
+    Sanctum --> Admin: 401 JSON
+    Role --> Admin: 403 JSON
+else allowed
+    Role -> Controller: dispatch action
+    alt GET /performances?period_id=
+        Controller -> Performance: group by user_id, period_id\ncount criteria, avg score
+        Performance -> DB: SELECT grouped performances
+        Controller -> Period: select period meta
+        Period -> DB: SELECT periods
+        Controller --> Admin: 200 JSON groups + meta periods
+    else GET /performances/form-options
+        Controller -> MasterData: load users, periods,\ncategories with criterias
+        MasterData -> DB: SELECT master data
+        Controller --> Admin: 200 JSON form options
+    else GET /performances/group
+        Controller -> Validator: validate user_id, period_id exists
+        Controller -> Period: findOrFail(period_id)
+        Controller -> MasterData: load categories->criterias->performances\nfor user and period
+        MasterData -> DB: SELECT grouped detail rows
+        Controller --> Admin: 200 JSON user, period, rows
+    else POST /performances or PATCH /performances/group
+        Controller -> Controller: saveGroup(isUpdate)
+        Controller -> Validator: validate user_id, period_id, scores[]
+        Controller -> Period: findOrFail(period_id)
+        alt period finalized
+            Controller --> Admin: 422 JSON periode selesai tidak bisa diubah
+        else editable
+            Controller -> Performance: count existing rows for user+period
+            Performance -> DB: SELECT COUNT(*)
+            alt store and existing rows found
+                Controller --> Admin: 409 JSON data sudah ada, gunakan edit
+            else allowed save
+                Controller -> DB: begin transaction
+                loop each score
+                    Controller -> Performance: updateOrCreate(user_id, period_id, criteria_id, score)
+                    Performance -> DB: INSERT or UPDATE performances
+                end
+                Controller -> DB: commit transaction
+                Controller --> Admin: 200 JSON berhasil ditambah/diperbarui
+            end
+        end
+    else DELETE /performances/group
+        Controller -> Validator: validate user_id, period_id exists
+        Controller -> Period: findOrFail(period_id)
+        alt period finalized
+            Controller --> Admin: 422 JSON periode selesai tidak bisa dihapus
+        else editable
+            Controller -> Performance: delete where user_id and period_id
+            Performance -> DB: DELETE performances
+            Controller --> Admin: 200 JSON berhasil dihapus
+        end
+    end
+end
+
+@enduml

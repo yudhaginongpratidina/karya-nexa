@@ -1,0 +1,86 @@
+@startuml
+title User Service - Sequence Diagram
+
+actor Admin
+participant "Laravel Router\nroutes/api.php" as Router
+participant "auth:sanctum" as Sanctum
+participant "RoleMiddleware\nrole:admin" as Role
+participant "UserController" as Controller
+participant "Validator" as Validator
+participant "User Model" as UserModel
+participant "Hash / Str" as Helpers
+database "Database" as DB
+
+Admin -> Router: /api/users/*
+Router -> Sanctum: validate bearer token
+alt unauthenticated
+    Sanctum --> Admin: 401 JSON
+else authenticated
+    Sanctum -> Role: check role admin
+    alt role not admin
+        Role --> Admin: 403 JSON Forbidden
+    else admin
+        Role -> Controller: dispatch action
+
+        alt GET /users
+            Controller -> UserModel: select users ordered by name
+            UserModel -> DB: SELECT id,name,email,role,must_change_password,created_at
+            DB --> UserModel: users
+            Controller --> Admin: 200 JSON users\nmeta.default_password=12345678
+        else GET /users/{id}
+            Controller -> UserModel: find selected fields by id
+            UserModel -> DB: SELECT user
+            alt not found
+                Controller --> Admin: 404 JSON User tidak ditemukan
+            else found
+                Controller --> Admin: 200 JSON user
+            end
+        else POST /users
+            Controller -> Validator: validate name, optional role
+            alt validation failed
+                Controller --> Admin: 422 JSON validation errors
+            else valid
+                Controller -> Helpers: generate email from slug(name)
+                Helpers -> UserModel: loop while email exists
+                UserModel -> DB: SELECT EXISTS users.email
+                Helpers -> Helpers: Hash::make default password
+                Controller -> UserModel: create user\nmust_change_password=true
+                UserModel -> DB: INSERT users
+                Controller --> Admin: 201 JSON user + default password meta
+            end
+        else PATCH /users/{id}
+            Controller -> Validator: validate name and role
+            Controller -> UserModel: find(id)
+            alt not found
+                Controller --> Admin: 404 JSON User tidak ditemukan
+            else found
+                Controller -> UserModel: update name, role
+                UserModel -> DB: UPDATE users
+                Controller --> Admin: 200 JSON fresh user
+            end
+        else PATCH /users/{id}/reset-password
+            Controller -> UserModel: find(id)
+            alt not found
+                Controller --> Admin: 404 JSON User tidak ditemukan
+            else found
+                Controller -> Helpers: Hash::make("12345678")
+                Controller -> UserModel: update password,\nmust_change_password=true
+                UserModel -> DB: UPDATE users
+                Controller --> Admin: 200 JSON message + default password meta
+            end
+        else DELETE /users/{id}
+            Controller -> UserModel: find(id)
+            alt not found
+                Controller --> Admin: 404 JSON User tidak ditemukan
+            else deleting current account
+                Controller --> Admin: 422 JSON akun sendiri tidak bisa dihapus
+            else allowed
+                Controller -> UserModel: delete()
+                UserModel -> DB: DELETE users
+                Controller --> Admin: 200 JSON User berhasil dihapus
+            end
+        end
+    end
+end
+
+@enduml

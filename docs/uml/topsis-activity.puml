@@ -1,0 +1,77 @@
+@startuml
+title TOPSIS Service - Activity Diagram
+
+start
+:Client request /api/topsis;
+:Router -> auth:sanctum -> role middleware;
+if (tidak lolos auth/role?) then (yes)
+    :Return 401 atau 403 JSON;
+    stop
+endif
+
+if (GET preview?) then (yes)
+    :Validate period_id;
+    :Load semua criteria;
+    if (criteria kosong?) then (yes)
+        :Return 422 JSON;
+        stop
+    endif
+    :Load users yang punya performance pada period;
+    if (users kosong?) then (yes)
+        :Return 422 JSON;
+        stop
+    endif
+    :Build decision matrix dari performance;
+    if (ada nilai user/kriteria yang belum lengkap?) then (yes)
+        :Return 422 JSON;
+        stop
+    endif
+    :Susun period, criterias, alternatives, scores;
+    :Return 200 JSON dataset;
+elseif (POST calculate?) then (yes)
+    :Validate period_id;
+    :Begin DB transaction;
+    :Load period;
+    if (period finalized?) then (yes)
+        :Rollback;
+        :Return 422 JSON;
+        stop
+    endif
+    :Build dataset;
+    :Normalize bobot criteria;
+    :Build decision matrix;
+    :Normalize decision matrix;
+    :Build weighted matrix;
+    :Tentukan ideal plus dan ideal minus;
+    :Hitung distance D+ dan D-;
+    :Hitung preference value CI;
+    :Urutkan ranking descending CI;
+    :Hapus result lama pada period;
+    :Simpan result ranking baru;
+    :Set period is_finalized=true;
+    :Commit;
+    :Return 200 JSON results + meta;
+elseif (GET index?) then (yes)
+    :Load periods yang memiliki topsisResults;
+    :Return 200 JSON;
+elseif (GET show by period?) then (yes)
+    :Load period dengan topsisResults dan user;
+    if (period tidak ada atau result kosong?) then (yes)
+        :Return 404 JSON;
+    else (found)
+        :Map result ranking;
+        :Return 200 JSON;
+    endif
+else (DELETE by period)
+    :Find period;
+    if (not found?) then (yes)
+        :Return 404 JSON;
+    else (found)
+        :Delete topsisResults by period;
+        :Set period is_finalized=false;
+        :Return 200 JSON;
+    endif
+endif
+stop
+
+@enduml
