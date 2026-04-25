@@ -1,0 +1,194 @@
+@startuml
+title Class Diagram
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+package "Controllers" {
+    abstract class Controller
+
+    class AuthController {
+        - passwordRules(requireCurrentPassword: bool): array
+        - generateUniqueEmail(name: string): string
+        + register(request: Request): JsonResponse
+        + login(request: Request): JsonResponse
+        + logout(request: Request): JsonResponse
+        + me(request: Request): JsonResponse
+        + forceChangePassword(request: Request): JsonResponse
+        + updatePassword(request: Request): JsonResponse
+    }
+
+    class UserController {
+        - DEFAULT_PASSWORD: string
+        - generateEmail(name: string): string
+        + index(): JsonResponse
+        + show(id: int): JsonResponse
+        + store(request: Request): JsonResponse
+        + update(request: Request, id: int): JsonResponse
+        + resetPassword(id: int): JsonResponse
+        + destroy(request: Request, id: int): JsonResponse
+    }
+
+    class PeriodController {
+        + index(): JsonResponse
+        + show(id: int): JsonResponse
+        + store(request: Request): JsonResponse
+        + update(request: Request, id: int): JsonResponse
+        + destroy(id: int): JsonResponse
+    }
+
+    class CategoryController {
+        + index(): JsonResponse
+        + show(id: int): JsonResponse
+        + store(request: Request): JsonResponse
+        + update(request: Request, id: int): JsonResponse
+        + destroy(id: int): JsonResponse
+    }
+
+    class CriteriaController {
+        + index(): JsonResponse
+        + show(id: int): JsonResponse
+        + store(request: Request): JsonResponse
+        + update(request: Request, id: int): JsonResponse
+        + destroy(id: int): JsonResponse
+    }
+
+    class PerformanceController {
+        + index(): JsonResponse
+        + formOptions(): JsonResponse
+        + group(request: Request): JsonResponse
+        + store(request: Request): JsonResponse
+        + update(request: Request): JsonResponse
+        + destroy(request: Request): JsonResponse
+        - saveGroup(request: Request, isUpdate: bool): JsonResponse
+    }
+
+    class TopsisController {
+        + preview(request: Request): JsonResponse
+        + calculate(request: Request): JsonResponse
+        + index(): JsonResponse
+        + show(periodId: int): JsonResponse
+        + destroyByPeriod(periodId: int): JsonResponse
+        - buildDataset(periodId: int): array
+        - calculateTopsis(periodId: int): array
+        - attachUserBreakdown(results: array, users: Collection, criterias: Collection, decisionMatrix: array): array
+        - normalizeWeights(criterias: Collection): array
+        - buildDecisionMatrix(users: Collection, criterias: Collection, periodId: int): array
+        - normalizeDecisionMatrix(users: Collection, criterias: Collection, matrix: array): array
+        - buildWeightedMatrix(users: Collection, criterias: Collection, normalizedMatrix: array, normalizedWeights: array): array
+        - buildIdealSolutions(criterias: Collection, weightedMatrix: array): array
+        - buildPreferenceScores(users: Collection, criterias: Collection, weightedMatrix: array, idealPlus: array, idealMinus: array): array
+    }
+}
+
+package "Middleware" {
+    class RoleMiddleware {
+        + handle(request: Request, next: Closure, roles: string[]): Response
+    }
+}
+
+package "Models" {
+    class User {
+        + id: bigint
+        + name: string
+        + email: string
+        + password: string
+        + role: enum(admin, user)
+        + must_change_password: boolean
+        + performances(): HasMany
+        + topsisResults(): HasMany
+    }
+
+    class Category {
+        + id: bigint
+        + name: string
+        + weight: decimal(8,2)
+        + criterias(): HasMany
+    }
+
+    class Criteria {
+        + id: bigint
+        + category_id: bigint
+        + name: string
+        + weight: decimal(8,4)
+        + type: enum(benefit, cost)
+        + category(): BelongsTo
+        + performances(): HasMany
+    }
+
+    class Period {
+        + id: bigint
+        + period_name: string
+        + is_finalized: boolean
+        + performances(): HasMany
+        + topsisResults(): HasMany
+    }
+
+    class Performance {
+        + id: bigint
+        + user_id: bigint
+        + criteria_id: bigint
+        + period_id: bigint
+        + score: decimal(8,4)
+        + user(): BelongsTo
+        + criteria(): BelongsTo
+        + period(): BelongsTo
+    }
+
+    class TopsisResult {
+        + id: bigint
+        + user_id: bigint
+        + period_id: bigint
+        + preference_value: decimal(10,8)
+        + rank: int
+        + user(): BelongsTo
+        + period(): BelongsTo
+    }
+}
+
+AuthController --|> Controller
+UserController --|> Controller
+PeriodController --|> Controller
+CategoryController --|> Controller
+CriteriaController --|> Controller
+PerformanceController --|> Controller
+TopsisController --|> Controller
+
+Category "1" *-- "0..*" Criteria : has
+Criteria "1" -- "0..*" Performance : evaluates by
+User "1" -- "0..*" Performance : has
+Period "1" -- "0..*" Performance : groups
+User "1" -- "0..*" TopsisResult : receives
+Period "1" -- "0..*" TopsisResult : stores
+
+AuthController ..> User : manages auth
+UserController ..> User : CRUD
+PeriodController ..> Period : CRUD
+CategoryController ..> Category : CRUD
+CriteriaController ..> Criteria : CRUD
+CriteriaController ..> Category : lookup
+PerformanceController ..> Performance : manages scores
+PerformanceController ..> User : loads employee
+PerformanceController ..> Period : validates period
+PerformanceController ..> Category : loads criteria tree
+TopsisController ..> TopsisResult : persists ranking
+TopsisController ..> Performance : builds matrix
+TopsisController ..> Criteria : reads weights
+TopsisController ..> Period : finalizes period
+TopsisController ..> User : ranks alternatives
+RoleMiddleware ..> User : checks role
+
+note right of Performance
+  Unique key:
+  (user_id, criteria_id, period_id)
+end note
+
+note bottom of TopsisController
+  Mengimplementasikan alur TOPSIS:
+  dataset -> normalisasi -> pembobotan ->
+  solusi ideal -> nilai preferensi -> ranking
+end note
+
+@enduml

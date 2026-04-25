@@ -1,0 +1,142 @@
+@startuml
+title Use Case Diagram
+left to right direction
+
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+actor "Guest" as Guest
+actor "Pengguna\nTerauthentikasi" as AuthUser
+actor "Admin" as Admin
+actor "User" as UserActor
+
+AuthUser <|-- Admin
+AuthUser <|-- UserActor
+
+rectangle "Sistem Penilaian Kinerja Karyawan\nKarya Nexa" {
+    usecase "Login" as UC_Login
+    usecase "Register" as UC_Register
+    usecase "Logout" as UC_Logout
+    usecase "Lihat Profil Sendiri" as UC_Me
+    usecase "Ganti Password Wajib" as UC_ForceChangePassword
+    usecase "Ubah Password" as UC_UpdatePassword
+
+    usecase "Kelola User" as UC_ManageUsers
+    usecase "Lihat Daftar User" as UC_UserIndex
+    usecase "Lihat Detail User" as UC_UserShow
+    usecase "Tambah User" as UC_UserStore
+    usecase "Ubah User" as UC_UserUpdate
+    usecase "Reset Password User" as UC_UserResetPassword
+    usecase "Hapus User" as UC_UserDestroy
+
+    usecase "Kelola Periode" as UC_ManagePeriods
+    usecase "Lihat Daftar Periode" as UC_PeriodIndex
+    usecase "Lihat Detail Periode" as UC_PeriodShow
+    usecase "Tambah Periode" as UC_PeriodStore
+    usecase "Ubah Periode" as UC_PeriodUpdate
+    usecase "Hapus Periode" as UC_PeriodDestroy
+
+    usecase "Kelola Kategori" as UC_ManageCategories
+    usecase "Lihat Daftar Kategori" as UC_CategoryIndex
+    usecase "Lihat Detail Kategori" as UC_CategoryShow
+    usecase "Tambah Kategori" as UC_CategoryStore
+    usecase "Ubah Kategori" as UC_CategoryUpdate
+    usecase "Hapus Kategori" as UC_CategoryDestroy
+
+    usecase "Kelola Kriteria" as UC_ManageCriterias
+    usecase "Lihat Daftar Kriteria" as UC_CriteriaIndex
+    usecase "Lihat Detail Kriteria" as UC_CriteriaShow
+    usecase "Tambah Kriteria" as UC_CriteriaStore
+    usecase "Ubah Kriteria" as UC_CriteriaUpdate
+    usecase "Hapus Kriteria" as UC_CriteriaDestroy
+
+    usecase "Kelola Data Performa" as UC_ManagePerformances
+    usecase "Lihat Ringkasan Performa" as UC_PerformanceIndex
+    usecase "Lihat Opsi Form Performa" as UC_PerformanceFormOptions
+    usecase "Lihat Detail Group Performa" as UC_PerformanceGroup
+    usecase "Tambah Data Performa" as UC_PerformanceStore
+    usecase "Ubah Data Performa" as UC_PerformanceUpdate
+    usecase "Hapus Data Performa" as UC_PerformanceDestroy
+
+    usecase "Kelola Hasil TOPSIS" as UC_ManageTopsis
+    usecase "Preview Dataset TOPSIS" as UC_TopsisPreview
+    usecase "Hitung TOPSIS" as UC_TopsisCalculate
+    usecase "Hapus Hasil TOPSIS\nper Periode" as UC_TopsisDestroy
+    usecase "Lihat Daftar Hasil TOPSIS" as UC_TopsisIndex
+    usecase "Lihat Detail Hasil TOPSIS" as UC_TopsisShow
+}
+
+Guest --> UC_Login
+Guest --> UC_Register
+
+AuthUser --> UC_Logout
+AuthUser --> UC_Me
+AuthUser --> UC_ForceChangePassword
+AuthUser --> UC_UpdatePassword
+AuthUser --> UC_PeriodIndex
+AuthUser --> UC_TopsisIndex
+AuthUser --> UC_TopsisShow
+
+Admin --> UC_ManageUsers
+Admin --> UC_ManagePeriods
+Admin --> UC_ManageCategories
+Admin --> UC_ManageCriterias
+Admin --> UC_ManagePerformances
+Admin --> UC_ManageTopsis
+
+UC_ManageUsers .> UC_UserIndex : <<include>>
+UC_ManageUsers .> UC_UserShow : <<include>>
+UC_ManageUsers .> UC_UserStore : <<include>>
+UC_ManageUsers .> UC_UserUpdate : <<include>>
+UC_ManageUsers .> UC_UserResetPassword : <<include>>
+UC_ManageUsers .> UC_UserDestroy : <<include>>
+
+UC_ManagePeriods .> UC_PeriodIndex : <<include>>
+UC_ManagePeriods .> UC_PeriodShow : <<include>>
+UC_ManagePeriods .> UC_PeriodStore : <<include>>
+UC_ManagePeriods .> UC_PeriodUpdate : <<include>>
+UC_ManagePeriods .> UC_PeriodDestroy : <<include>>
+
+UC_ManageCategories .> UC_CategoryIndex : <<include>>
+UC_ManageCategories .> UC_CategoryShow : <<include>>
+UC_ManageCategories .> UC_CategoryStore : <<include>>
+UC_ManageCategories .> UC_CategoryUpdate : <<include>>
+UC_ManageCategories .> UC_CategoryDestroy : <<include>>
+
+UC_ManageCriterias .> UC_CriteriaIndex : <<include>>
+UC_ManageCriterias .> UC_CriteriaShow : <<include>>
+UC_ManageCriterias .> UC_CriteriaStore : <<include>>
+UC_ManageCriterias .> UC_CriteriaUpdate : <<include>>
+UC_ManageCriterias .> UC_CriteriaDestroy : <<include>>
+
+UC_ManagePerformances .> UC_PerformanceIndex : <<include>>
+UC_ManagePerformances .> UC_PerformanceFormOptions : <<include>>
+UC_ManagePerformances .> UC_PerformanceGroup : <<include>>
+UC_ManagePerformances .> UC_PerformanceStore : <<include>>
+UC_ManagePerformances .> UC_PerformanceUpdate : <<include>>
+UC_ManagePerformances .> UC_PerformanceDestroy : <<include>>
+
+UC_ManageTopsis .> UC_TopsisPreview : <<include>>
+UC_ManageTopsis .> UC_TopsisCalculate : <<include>>
+UC_ManageTopsis .> UC_TopsisDestroy : <<include>>
+UC_ManageTopsis .> UC_TopsisIndex : <<include>>
+UC_ManageTopsis .> UC_TopsisShow : <<include>>
+
+note bottom of AuthUser
+  Akses AuthUser membutuhkan
+  autentikasi Sanctum.
+end note
+
+note bottom of Admin
+  Admin memiliki akses penuh
+  ke fitur master data, performa,
+  dan perhitungan TOPSIS.
+end note
+
+note bottom of UserActor
+  User hanya dapat melihat daftar periode,
+  melihat hasil TOPSIS, dan mengelola akun sendiri.
+end note
+
+@enduml

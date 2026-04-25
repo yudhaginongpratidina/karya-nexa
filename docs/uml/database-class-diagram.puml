@@ -1,0 +1,139 @@
+@startuml
+title Database Class Diagram
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+hide methods
+
+package "Database Schema" {
+    class users <<table>> {
+        + id : bigint <<PK>>
+        + name : varchar(255)
+        + email : varchar(255) <<UK>>
+        + email_verified_at : timestamp nullable
+        + password : varchar(255)
+        + role : enum(admin, user)
+        + must_change_password : boolean
+        + remember_token : varchar(100) nullable
+        + created_at : timestamp
+        + updated_at : timestamp
+    }
+
+    class categories <<table>> {
+        + id : bigint <<PK>>
+        + name : varchar(255) <<UK>>
+        + weight : decimal(8,2)
+        + created_at : timestamp
+        + updated_at : timestamp
+    }
+
+    class criterias <<table>> {
+        + id : bigint <<PK>>
+        + category_id : bigint <<FK>>
+        + name : varchar(255)
+        + weight : decimal(8,4)
+        + type : enum(benefit, cost)
+        + created_at : timestamp
+        + updated_at : timestamp
+    }
+
+    class periods <<table>> {
+        + id : bigint <<PK>>
+        + period_name : varchar(255) <<UK>>
+        + is_finalized : boolean
+        + created_at : timestamp
+        + updated_at : timestamp
+    }
+
+    class performances <<table>> {
+        + id : bigint <<PK>>
+        + user_id : bigint <<FK>>
+        + criteria_id : bigint <<FK>>
+        + period_id : bigint <<FK>>
+        + score : decimal(8,4)
+        + created_at : timestamp
+        + updated_at : timestamp
+    }
+
+    class topsis_results <<table>> {
+        + id : bigint <<PK>>
+        + user_id : bigint <<FK>>
+        + period_id : bigint <<FK>>
+        + preference_value : decimal(10,8)
+        + rank : integer nullable
+        + created_at : timestamp
+        + updated_at : timestamp
+    }
+
+    class personal_access_tokens <<table>> {
+        + id : bigint <<PK>>
+        + tokenable_type : varchar
+        + tokenable_id : bigint
+        + name : varchar
+        + token : varchar(64) <<UK>>
+        + abilities : text nullable
+        + last_used_at : timestamp nullable
+        + expires_at : timestamp nullable
+        + created_at : timestamp nullable
+        + updated_at : timestamp nullable
+    }
+
+    class password_reset_tokens <<table>> {
+        + email : varchar(255) <<PK>>
+        + token : varchar(255)
+        + created_at : timestamp nullable
+    }
+
+    class sessions <<table>> {
+        + id : varchar(255) <<PK>>
+        + user_id : bigint nullable <<FK>>
+        + ip_address : varchar(45) nullable
+        + user_agent : text nullable
+        + payload : longtext
+        + last_activity : integer
+    }
+}
+
+categories "1" -- "0..*" criterias : category_id
+users "1" -- "0..*" performances : user_id
+criterias "1" -- "0..*" performances : criteria_id
+periods "1" -- "0..*" performances : period_id
+users "1" -- "0..*" topsis_results : user_id
+periods "1" -- "0..*" topsis_results : period_id
+users "1" -- "0..*" sessions : user_id
+users "1" .. "0..*" personal_access_tokens : morphMany
+
+note right of performances
+  Unique constraint:
+  (user_id, criteria_id, period_id)
+end note
+
+note bottom of criterias
+  Index:
+  category_id
+  (category_id, type)
+end note
+
+note bottom of periods
+  Index:
+  is_finalized
+end note
+
+note bottom of personal_access_tokens
+  Tabel bawaan Laravel Sanctum
+  untuk autentikasi API token.
+end note
+
+note bottom of sessions
+  Tabel bawaan Laravel session driver.
+end note
+
+note bottom of password_reset_tokens
+  Tabel bawaan Laravel
+  untuk reset password.
+end note
+
+@enduml

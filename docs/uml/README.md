@@ -1,6 +1,14 @@
 # UML API Services
 
-Folder ini berisi sequence diagram dan activity diagram dalam format PlantUML untuk service API Laravel.
+Folder ini berisi class diagram, sequence diagram, dan activity diagram dalam format PlantUML untuk service API Laravel.
+
+## Diagram Struktur
+
+| Diagram | File |
+| --- | --- |
+| Class Diagram | `class-diagram.puml` |
+| Database Class Diagram | `database-class-diagram.puml` |
+| Use Case Diagram | `use-case-diagram.puml` |
 
 ## Daftar Diagram
 
