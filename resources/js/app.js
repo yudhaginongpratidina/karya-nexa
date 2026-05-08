@@ -1330,6 +1330,9 @@ async function renderCalculateTab() {
                     closeModal();
                     showToast('Perhitungan TOPSIS berhasil dijalankan.');
                     renderCalculateTab();
+                    state.activeTab = 'results';
+                    renderTabs();
+                    renderActiveTab();
                 },
             });
         });

@@ -10,7 +10,7 @@
     <div id="auth-panel" class="auth-layout">
         <section class="auth-card">
             <div class="auth-card__header">
-                <p class="eyebrow">Karya Nexa</p>
+                <!-- <p class="eyebrow">Karya Nexa</p> -->
                 <h1>Portal Login</h1>
                 <p class="auth-copy">Masuk dengan akun yang sudah terdaftar untuk mengakses dashboard penilaian.</p>
             </div>
@@ -61,7 +61,7 @@
                 <div class="brand-card">
                     <div class="dashboard-header__row">
                         <div>
-                            <p class="eyebrow">Karya Nexa</p>
+                            <!-- <p class="eyebrow">Karya Nexa</p> -->
                             <h2>TOPSIS Dashboard</h2>
                             <p id="session-info" class="muted">Belum login.</p>
                         </div>

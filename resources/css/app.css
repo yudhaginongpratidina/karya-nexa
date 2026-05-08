@@ -500,6 +500,7 @@ textarea:focus {
     font-size: 0.74rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
+    text-align: left;
     font-weight: 800;
 }
 
