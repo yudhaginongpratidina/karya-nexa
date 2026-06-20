@@ -256,6 +256,9 @@ class TopsisController extends Controller
                 'normalized_weights' => $normalizedWeights,
                 'ideal_plus' => $idealPlus,
                 'ideal_minus' => $idealMinus,
+                'decision_matrix' => $decisionMatrix,
+                'normalized_matrix' => $normalizedMatrix,
+                'weighted_matrix' => $weightedMatrix,
             ],
         ];
     }
@@ -426,6 +429,8 @@ class TopsisController extends Controller
 
             $results[] = [
                 'user_id' => $user->id,
+                'd_plus' => $dPlus,
+                'd_minus' => $dMinus,
                 'ci' => $denominator > 0 ? $dMinus / $denominator : 0.0,
             ];
         }

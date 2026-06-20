@@ -1327,6 +1327,45 @@ async function renderCalculateTab() {
                 onConfirm: async () => {
                     const result = await request({ method: 'post', url: '/api/topsis/calculate', data: { period_id: Number(periodId) } });
                     if (!result) return;
+                    
+                    // Log proses perhitungan ke console
+                    console.log('--- Respons API Calculate (Raw) ---', result);
+                    
+                    if (result && result.meta) {
+                        const m = result.meta;
+                        console.log('--- Detail Perhitungan TOPSIS (Step-by-Step) ---');
+                        
+                        console.log('--- 1. Matriks Keputusan (X) ---');
+                        console.log('Maksud: Mengumpulkan nilai performa mentah untuk setiap Alternatif (A) terhadap setiap Kriteria (C).');
+                        console.table(m.decision_matrix);
+                        
+                        console.log('--- 2. Matriks Ternormalisasi (R) ---');
+                        console.log('Maksud: Mengubah skala nilai ke rentang [0,1] agar setara, menggunakan rumus: r_ij = x_ij / sqrt(sum(x_ij^2)).');
+                        console.table(m.normalized_matrix);
+                        
+                        console.log('--- 3. Matriks Berbobot (Y) ---');
+                        console.log('Maksud: Memberikan bobot pada nilai ternormalisasi berdasarkan kepentingan kriteria, menggunakan rumus: y_ij = r_ij * w_j.');
+                        console.table(m.weighted_matrix);
+                        
+                        console.log('--- 4. Solusi Ideal (A+ & A-) ---');
+                        console.log('Maksud: Menentukan nilai terbaik (A+) dan terburuk (A-) untuk setiap kriteria.');
+                        console.table({ IdealPlus: m.ideal_plus, IdealMinus: m.ideal_minus });
+                        
+                        console.log('--- 5. Jarak Solusi Ideal & Preferensi (CI) ---');
+                        console.log('Maksud: Menghitung jarak (D+, D-) tiap alternatif ke solusi ideal, lalu menghitung nilai preferensi (CI = D- / (D+ + D-)).');
+                        console.table(result.data.map(item => ({
+                            Rank: item.rank,
+                            User: item.user_name,
+                            D_Plus: item.d_plus,
+                            D_Minus: item.d_minus,
+                            Preferensi: item.ci || item.preference_value
+                        })));
+                        
+                        console.log('---------------------------------');
+                    } else {
+                        console.error('Meta data tidak ditemukan! Respons:', result);
+                    }
+
                     closeModal();
                     showToast('Perhitungan TOPSIS berhasil dijalankan.');
                     renderCalculateTab();
