@@ -1436,7 +1436,7 @@ async function renderResultsTab() {
                             <tr>
                                 <td>${item.rank}</td>
                                 <td>${escapeHtml(item.user_name)}</td>
-                                <td>${Number(item.preference_value).toFixed(6)}</td>
+                                <td>${Number(item.preference_value).toFixed(2)}</td>
                             </tr>
                         `
                     )
